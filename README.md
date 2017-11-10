@@ -67,6 +67,17 @@ Elements.Where(c=>c.boolean == true && c=>c.int >= 10 && c.enum.HasFlag(v) => WH
 
 Elements.Where(...).OrWhere(...) => WHERE (...) OR ( ... ) 
 ```
+# Methods 
+```
+string.contains => LIKE %pattern%
+!string.containes => NOT LIKE
+string.startwith => LIKE pattern%
+string.endwith => LIKE %pattern
+enum.Hasflag => (enum & value) = value
+== null => ISNULL
+!= null => IS NOT NULL
+```
+
 # Options
 Buffering or not 
 There is a DbFactory class for configuration.
