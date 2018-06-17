@@ -44,12 +44,14 @@ namespace MicroRepository.Repository
         internal static string GetPropertyName(BinaryExpression body)
         {
             string propertyName = body.Left.ToString().Split('.')[1];
-
+            
+            // hack to remove the trailing ) when convering.
             if (body.Left.NodeType == ExpressionType.Convert)
-            {
-                // hack to remove the trailing ) when convering.
                 propertyName = propertyName.Replace(")", string.Empty);
-            }
+            
+             // hack for mono 
+            if (propertyName.IndexOf(',') > -1)
+                propertyName = propertyName.Split(',')[0].Trim();
 
             return propertyName;
         }
