@@ -9,42 +9,42 @@ using System.Text;
 
 namespace MicroRepository.Sql
 {
-    public partial class SqlQueryableResult<TEntity> : IEnumerable<TEntity>
+    public partial class EnumerableRepository<TEntity> : IEnumerable<TEntity>
     {
 
-        void checkExecution() 
+        void CheckExecution() 
         {
             if(this.Enumerated)
                 throw new InvalidOperationException("Sql query has already been executed. You can not add new clauses");
         }
 
 
-        public SqlQueryableResult<TEntity> AndRawSql( string sql)
+        public EnumerableRepository<TEntity> AndRawSql( string sql)
         {
-            checkExecution();
+            CheckExecution();
             this.InternalBuilder.Where(sql);
             return this;
         }
-        public  SqlQueryableResult<TEntity> OrRawSql( string sql) 
+        public EnumerableRepository<TEntity> OrRawSql( string sql) 
         {
-            checkExecution();
+            CheckExecution();
             this.InternalBuilder.OrWhere(sql);
             return this;
         }
                 
 
-        public  SqlQueryableResult<TEntity> In<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
+        public EnumerableRepository<TEntity> In<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
         {
-            checkExecution();
+            CheckExecution();
             MemberExpression body = (MemberExpression)selector.Body;
             string column = TableDefinitionCache.GetPropertiesDictionary(typeof(T))[body.Member.Name].EnquotedDbName;
             this.InternalBuilder.Where(string.Format("{0} IN @In", column), new { In = search} );
             return this;
         }
 
-        public  SqlQueryableResult<TEntity> OrIn<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
+        public EnumerableRepository<TEntity> OrIn<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
         {
-            checkExecution();
+            CheckExecution();
             MemberExpression body = (MemberExpression)selector.Body;
             string column = TableDefinitionCache.GetPropertiesDictionary(typeof(T))[body.Member.Name].EnquotedDbName;
             this.InternalBuilder.OrWhere(string.Format("{0} IN @In", column), new { In = search });
@@ -86,7 +86,7 @@ namespace MicroRepository.Sql
         ///
         public  int Count()
         {
-            checkExecution();
+            CheckExecution();
             return Count(null);
             
         }
@@ -118,12 +118,12 @@ namespace MicroRepository.Sql
         //     The number of elements in source is larger than System.Int32.MaxValue.
         public  int Count(Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             if (predicate != null)
                 this.Where(predicate);
             
             InternalBuilder.Template = TableDefinitionCache.GetTableDefinition(typeof(TEntity)).CountTemplate;
-            ((SqlQueryableResult<TEntity>)this).Enumerated = true;
+            ((EnumerableRepository<TEntity>)this).Enumerated = true;
             return Connection.ExecuteScalar<int>(InternalBuilder.RawSql, InternalBuilder.Parameters);
         }
         
@@ -147,9 +147,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source is null.
-        public  SqlQueryableResult<TEntity> Distinct()
+        public EnumerableRepository<TEntity> Distinct()
         {
-            checkExecution();
+            CheckExecution();
             InternalBuilder.Distinct();
             return this;
         }
@@ -178,7 +178,7 @@ namespace MicroRepository.Sql
         //     source is null.
         public TEntity FirstOrDefault()
         {
-            checkExecution();
+            CheckExecution();
             return FirstOrDefault(null);
         }
         //
@@ -207,7 +207,7 @@ namespace MicroRepository.Sql
         //     source or predicate is null.
         public TEntity FirstOrDefault(Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             InternalBuilder.Take(1);
             if(predicate != null)
             Where(predicate);
@@ -239,9 +239,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or keySelector is null.
-        public  SqlQueryableResult<TEntity> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
+        public EnumerableRepository<TEntity> GroupBy<TKey>(Expression<Func<TEntity, TKey>> keySelector)
         {
-            checkExecution();
+            CheckExecution();
             MemberExpression body = (MemberExpression)keySelector.Body;
             string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
             InternalBuilder.GroupBy(column);
@@ -272,7 +272,7 @@ namespace MicroRepository.Sql
         //     The source sequence is empty.
         public TEntity Last()
         {
-            checkExecution();
+            CheckExecution();
             return Last(null);
         }
         //
@@ -303,7 +303,7 @@ namespace MicroRepository.Sql
         //     empty.
         public TEntity Last( Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             if(predicate != null)
                 Where(predicate);
             return ((IEnumerable<TEntity>)this).Last();
@@ -330,7 +330,7 @@ namespace MicroRepository.Sql
         //     source is null.
         public TEntity LastOrDefault()
         {
-            checkExecution();
+            CheckExecution();
             return LastOrDefault(null);
         }
         //
@@ -359,7 +359,7 @@ namespace MicroRepository.Sql
         //     source or predicate is null.
         public TEntity LastOrDefault( Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             if(predicate != null)
                 Where(predicate);
             return ((IEnumerable<TEntity>)this).LastOrDefault();
@@ -390,7 +390,7 @@ namespace MicroRepository.Sql
         //     The number of elements exceeds System.Int64.MaxValue.
         public  long LongCount()
         {
-            checkExecution();
+            CheckExecution();
             return (long)Count();
         }
         //
@@ -422,7 +422,7 @@ namespace MicroRepository.Sql
         //     The number of matching elements exceeds System.Int64.MaxValue.
         public  long LongCount( Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             return (long)Count(predicate);
         }
 
@@ -473,9 +473,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or keySelector is null.
-        public  SqlQueryableResult<TEntity> OrderBy<TKey>( Expression<Func<TEntity, TKey>> keySelector)
+        public EnumerableRepository<TEntity> OrderBy<TKey>( Expression<Func<TEntity, TKey>> keySelector)
         {
-            checkExecution();
+            CheckExecution();
             MemberExpression body = (MemberExpression)keySelector.Body;
             string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
             InternalBuilder.OrderBy(column);            
@@ -507,9 +507,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or keySelector is null.
-        public  SqlQueryableResult<TEntity> OrderByDescending<TKey>( Expression<Func<TEntity, TKey>> keySelector)
+        public EnumerableRepository<TEntity> OrderByDescending<TKey>( Expression<Func<TEntity, TKey>> keySelector)
         {
-            checkExecution();
+            CheckExecution();
              MemberExpression body = (MemberExpression)keySelector.Body;
              string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
              InternalBuilder.OrderBy( column + " DESC");            
@@ -543,7 +543,7 @@ namespace MicroRepository.Sql
         //     is empty.
         public TEntity Single()
         {
-            checkExecution();
+            CheckExecution();
             return Single(null);
         }
         //
@@ -574,7 +574,7 @@ namespace MicroRepository.Sql
         //     satisfies the condition in predicate.-or-The source sequence is empty.
         public TEntity Single(Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             if(predicate != null)
                 Where(predicate);
             return ((IEnumerable<TEntity>)this).Single();
@@ -606,7 +606,7 @@ namespace MicroRepository.Sql
         //     The input sequence contains more than one element.
         public TEntity SingleOrDefault()
         {
-            checkExecution();
+            CheckExecution();
             return SingleOrDefault(null);
         }
         //
@@ -635,7 +635,7 @@ namespace MicroRepository.Sql
         //     source or predicate is null.
         public TEntity SingleOrDefault( Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             if(predicate != null)
                 Where(predicate);
             return ((IEnumerable<TEntity>)this).Single();
@@ -664,7 +664,7 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source is null.
-        public  SqlQueryableResult<TEntity> Skip(int count)
+        public EnumerableRepository<TEntity> Skip(int count)
         {
             InternalBuilder.Skip(count);
             return this;
@@ -693,7 +693,7 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source is null.
-        public  SqlQueryableResult<TEntity> Take( int count)
+        public EnumerableRepository<TEntity> Take( int count)
         {
             InternalBuilder.Take(count);
             return this;
@@ -721,9 +721,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or predicate is null.
-        public  SqlQueryableResult<TEntity> TakeWhile( Expression<Func<TEntity, bool>> predicate)
+        public EnumerableRepository<TEntity> TakeWhile( Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             return Where(predicate);
         }
         
@@ -753,9 +753,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or keySelector is null.
-        public  SqlQueryableResult<TEntity> ThenBy< TKey>( Expression<Func<TEntity, TKey>> keySelector)
+        public EnumerableRepository<TEntity> ThenBy< TKey>( Expression<Func<TEntity, TKey>> keySelector)
         {
-            checkExecution();
+            CheckExecution();
             return OrderBy(keySelector);
         }
         
@@ -785,9 +785,9 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or keySelector is null.
-        public  SqlQueryableResult<TEntity> ThenByDescending<TKey>( Expression<Func<TEntity, TKey>> keySelector)
+        public EnumerableRepository<TEntity> ThenByDescending<TKey>( Expression<Func<TEntity, TKey>> keySelector)
         {
-            checkExecution();
+            CheckExecution();
             return OrderByDescending(keySelector);
         }
         
@@ -815,13 +815,13 @@ namespace MicroRepository.Sql
         // Exceptions:
         //   System.ArgumentNullException:
         //     source or predicate is null.
-        public  SqlQueryableResult<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
+        public EnumerableRepository<TEntity> Where(Expression<Func<TEntity, bool>> predicate)
         {
             this.InternalBuilder.Where($"({WhereImpl(predicate)})",null);
             return this;
         }
 
-        public  SqlQueryableResult<TEntity> OrWhere(Expression<Func<TEntity, bool>> predicate)
+        public EnumerableRepository<TEntity> OrWhere(Expression<Func<TEntity, bool>> predicate)
         {
             this.InternalBuilder.OrWhere($"({WhereImpl(predicate)})", null);
             return this;
@@ -829,12 +829,12 @@ namespace MicroRepository.Sql
 
         string WhereImpl(Expression<Func<TEntity, bool>> predicate)
         {
-            checkExecution();
+            CheckExecution();
             List<QueryParameter> queryProperties = new List<QueryParameter>();            
             ExpressionParser.ParseExpression(predicate.Body, ExpressionType.Default, ref queryProperties);
             var properties = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity));
 
-            string currentProperty = null;
+            string currentProperty;
 
             StringBuilder sqlchunk = new StringBuilder();
 

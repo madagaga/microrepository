@@ -18,7 +18,7 @@ namespace MicroRepository.Core.Caching
             if (!_propertyCache.ContainsKey(type))
                 _propertyCache.TryAdd(
                     type,
-                    type.GetProperties()
+                    type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
                         .Where(c=>c.GetMethod != null && c.SetMethod != null)
                         .Select(p => new CompiledPropertyAccessor<object>(p))
                         .ToDictionary(c => c.Property.Name, c => c));

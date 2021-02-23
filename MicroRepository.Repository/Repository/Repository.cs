@@ -14,15 +14,14 @@ namespace MicroRepository.Repository
     public partial class Repository<TEntity> : IRepository<TEntity> where TEntity: class
     {
 
-        private TableDefinition _tableDefinition;
+        private readonly TableDefinition _tableDefinition;
 
-        private DataBasePropertyAccessor[] _keyColumns;
+        private readonly DataBasePropertyAccessor[] _keyColumns;
 
-        private object _syncObj = new object();
+        private readonly object _syncObj = new object();
         public Repository(IDbConnection connection)
-        {   
-            Connection = connection;
-
+        {
+            this.Connection = connection;
             Type targetType = typeof(TEntity);
 
             _tableDefinition = TableDefinitionCache.GetTableDefinition(targetType);
@@ -31,14 +30,15 @@ namespace MicroRepository.Repository
         }
 
 
-#region IRepository 
-                
+        #region IRepository 
+
         public IDbConnection Connection { get; private set; }
 
-        public SqlQueryableResult<TEntity> Elements
+        public EnumerableRepository<TEntity> Elements
         {
-            get { return new Sql.SqlQueryableResult<TEntity>(Connection); }
+            get { return new Sql.EnumerableRepository<TEntity>(Connection); }
         }
+
 
         public virtual TEntity Add(TEntity item)
         {            
@@ -61,7 +61,7 @@ namespace MicroRepository.Repository
                         if (_keyColumns.Length > 0)
                         {
                             builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                            bindKeyColumn(item, builder);
+                            BindKeyColumn(item, builder);
                             builder.Take(1);
                             return Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
                         }
@@ -77,7 +77,7 @@ namespace MicroRepository.Repository
         public virtual bool Remove(TEntity item)
         {
             SqlBuilder builder = new SqlBuilder(_tableDefinition.DeleteTemplate);
-            bindKeyColumn(item, builder);
+            BindKeyColumn(item, builder);
             lock (_syncObj)            
             return Connection.Execute(builder.RawSql, builder.Parameters) != 0;
         }
@@ -91,7 +91,7 @@ namespace MicroRepository.Repository
                 {
                     //delta 
                     builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                    bindKeyColumn(item, builder);
+                    BindKeyColumn(item, builder);
                     builder.Take(1);
                     TEntity original = Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
                     Delta<TEntity> delta = new Delta<TEntity>(item);
@@ -107,24 +107,24 @@ namespace MicroRepository.Repository
                     foreach (DataBasePropertyAccessor prop in changedProps)
                         builder.AddParameter(prop.Name, prop.Get(item));
 
-                    bindKeyColumn(original, builder);
+                    BindKeyColumn(original, builder);
                 }
                 else
                 {
                     
                     builder = new SqlBuilder(_tableDefinition.UpdateTemplate);
                     builder.AddParameter(item);
-                    bindKeyColumn(item, builder);
+                    BindKeyColumn(item, builder);
                 }
 
                 if (Connection.Execute(builder.RawSql, builder.Parameters) != 0)
                 {
                     builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                    bindKeyColumn(item, builder);
+                    BindKeyColumn(item, builder);
                     builder.Take(1);
                     return Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
                 }
-                return default(TEntity);
+                return default;
             }
         }
 
@@ -165,9 +165,9 @@ namespace MicroRepository.Repository
 
 #region helpers        
 
-        void bindKeyColumn(TEntity item, SqlBuilder builder)
+        void BindKeyColumn(TEntity item, SqlBuilder builder)
         {
-            object value = null;
+            object value;
             foreach (DataBasePropertyAccessor key in _keyColumns)
             {
                 value = key.Get(item);
@@ -182,8 +182,12 @@ namespace MicroRepository.Repository
             }
         }
 
-#endregion
-        
+        #endregion
+
+        #region IEnumerable
+
+        #endregion
+
     }
 }
 
