@@ -22,9 +22,17 @@ namespace MicroRepository.Core.Schema
             private set;
         }
 
+        public Type Type
+        {
+            get;
+            private set;
+        }
+
+
         public CompiledPropertyAccessor(PropertyInfo property)            
         {
             Property = property;
+            Type = property.PropertyType;
             _setter = MakeSetter(property);
             _getter = MakeGetter( property);
         }
@@ -55,7 +63,7 @@ namespace MicroRepository.Core.Schema
         {            
             ParameterExpression entityParameter = Expression.Parameter(typeof(T));
             ParameterExpression objectParameter = Expression.Parameter(typeof(Object));
-            MemberExpression toProperty = Expression.Property(Expression.TypeAs(entityParameter, property.DeclaringType), property);
+            MemberExpression toProperty = Expression.Property(Expression.TypeAs(entityParameter, property.DeclaringType), property);            
             UnaryExpression fromValue = Expression.Convert(objectParameter, property.PropertyType);
             BinaryExpression assignment = Expression.Assign(toProperty, fromValue);
             Expression<Action<T, object>> lambda = Expression.Lambda<Action<T, object>>(assignment, entityParameter, objectParameter);
