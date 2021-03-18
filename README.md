@@ -3,7 +3,8 @@ Inspired by Dapper, petapoco, for learning purposes.
 It is a simple tiny orm with repository pattern.
 It work (a little bit) like entity framework (usage is relatively the same)
 
-# initializing Repository
+# Initializing Repository  
+With a explicit implementation 
 ```csharp
 public class DbContext : MicroRepository.Repository.Repositories
 {
@@ -14,46 +15,90 @@ public class DbContext : MicroRepository.Repository.Repositories
     public Repository<Payment> Payments { get; set; }
 }
 ```
-Where  'default' is the name of the connection string. The default initialization uses a discovery service like EF. You can create your own and initialize on demand
+Where  'default' is the name of the connection string. The default initialization uses a discovery service like EF. You can create your own and initialize on demand.
+
+Whith implicit implementation 
+
 ```csharp
-Repository<Configuration>
-``` 
-is the defaut usage. You can create yout own repo by implemeting IRepository
+public class DbContext : MicroRepository.Repository.Repositories
+{
+    public DbContext():base(new System.Data.SQLite.SQLiteConnection("Data Source=local.db;"))
+    {
+
+    }
+}
+```
+
+You can create yout own repo by implemeting IRepository
 IRepository exposes 
 ```csharp
-// for lambda query
-SqlQueryableResult<TEntity> Elements { get; }
-// add 
-TEntity Add(TEntity item);
-// remove
-bool Remove(TEntity item);
-// update 
-TEntity Update(TEntity item);        
-// find by primary kers
-TEntity Find(params object[] orderedKeyValues);
-// execute raw query
-IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);            
+ /// <summary>
+        /// Elements - data queryable 
+        /// </summary>
+        EnumerableRepository<TEntity> Elements { get; }
+
+        /// <summary>
+        /// Add an element to database
+        /// </summary>
+        /// <param name="item">element to be added </param>
+        /// <returns></returns>
+        TEntity Add(TEntity item);
+
+        /// <summary>
+        /// Removes element from database 
+        /// </summary>
+        /// <param name="item"></param>
+        /// <returns></returns>
+        bool Remove(TEntity item);
+
+        /// <summary>
+        /// Updates element in database <seealso cref="RepositoryDiscoveryService.UpdateChangeOnly"/>
+        /// </summary>
+        /// <param name="item">item to upload </param>
+        /// <returns>element updated from database</returns>
+        TEntity Update(TEntity item);
+
+        /// <summary>
+        /// Find an element by its primary key
+        /// class bust be decorated with KeyAttribute
+        /// </summary>
+        /// <param name="orderedKeyValues">primary key s</param>
+        /// <returns>Found element </returns>
+        TEntity Find(params object[] orderedKeyValues);
+
+        /// <summary>
+        /// Execute a raw query 
+        /// </summary>
+        /// <param name="sqlQuery">sql query</param>
+        /// <param name="parameter">object parameter</param>
+        /// <returns>Found element</returns>
+        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);         
 ```
 
 # usage 
 Get all entities 
 ```csharp
 List<Account> accounts = new DbContext().Accounts.Elements;
+Or 
+List<Account> accounts = new DbContext().GetRepository<Account>().Elements;
 ```
 
 Filtering example 
 ```csharp
 List<Account> accounts = new DbContext().Accounts.Elements.Where(c => c.Email == email);
 ```
-SqlQueryableResult conditions are translated into sql. So you can not update condition if result has been enumerated (like IQueryable)
+EnumerableRepository conditions are translated into sql. So you can not update condition if result has been enumerated (like IQueryable).
 
 # Available sql components 
 ```
-Elements.AndRawSql("column=value"); => AND table.column=value
-Elements.OrRawSql("column=value"); => OR table.column=value
+Elements.AndRawSql("column=value"); => AND column=value
+Elements.OrRawSql("column=value"); => OR column=value
 Elements.In(c=>c.Column, columnValueArray) => AND table.column IN (columnValueArray)
+Elements.NotIn(c=>c.Column, columnValueArray) => AND table.column IN (columnValueArray)
 Elements.OrIn(c=>c.Column, columnValueArray) => OR table.column IN (columnValueArray)
 Elements.Any() => execute a select count and return count != 0 (with or without param)
+Elements.LeftJoin<Entity2>((t1, t2)=>t1.Id == t2.t1Id) => Left join Table2 on Table1.Id = Table2.t1Id
+Elements.Select(c=>c.Column) => Select Column 
 Elements.Count() => Select Count(*) from table, with or without param 
 Elements.Distinct() => add distinct to sql query
 Elements.FirstOrDefault() => Add take 1 to sql query
@@ -76,6 +121,8 @@ string.endwith => LIKE %pattern
 enum.Hasflag => (enum & value) = value
 == null => ISNULL
 != null => IS NOT NULL
+c.boolean => = true
+!c.boolean => = false
 ```
 
 # Options
