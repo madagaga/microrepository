@@ -12,12 +12,12 @@ namespace MicroRepository.Schema
     public class Delta<T> where T :class
     {
 
-        private Dictionary<string, DataBasePropertyAccessor> _propertiesThatExist;
+        private readonly Dictionary<string, DataBasePropertyAccessor> _propertiesThatExist;
         private HashSet<string> _changedProperties;
-        private T _entity;
-        private Type _entityType;
+        private readonly T _entity;
+        private readonly Type _entityType;
 
-        private HashSet<string> _ignoredProperties;
+        private readonly HashSet<string> _ignoredProperties;
 
         /// <summary>
         /// Initializes a new instance of <see cref="Delta{T}"/>.

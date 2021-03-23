@@ -21,7 +21,7 @@ namespace MicroRepository.Schema
         public bool IsPrimaryKey { get; private set; }
         public bool IsIdentity { get; private set; }
         
-        string _dBName;
+        readonly string _dBName;
 
         internal CompiledPropertyAccessor<object> _compiledPropertyAccessor;
 

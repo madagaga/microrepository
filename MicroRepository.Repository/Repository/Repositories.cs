@@ -15,9 +15,9 @@ namespace MicroRepository.Repository
         
         public Repositories(IDbConnection connection)
         {
-            switch(connection.GetType().Name)
+            switch(connection.GetType().Name.ToLower())
             {
-                case "SQLiteConnection":
+                case "sqliteconnection":
                     RepositoryDiscoveryService.DataBaseType = Enums.DatabaseType.SQLite;
                     break;
                 default:

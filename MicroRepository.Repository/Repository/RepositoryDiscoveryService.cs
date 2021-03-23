@@ -11,9 +11,9 @@ namespace MicroRepository.Repository
 {
     internal static class RepositoryDiscoveryService
     {
-        static ConcurrentDictionary<Type, PropertyInfo[]> _reflectionCache = new ConcurrentDictionary<Type, PropertyInfo[]>();
-        static ConcurrentDictionary<Type, Delegate> _constructorCache = new ConcurrentDictionary<Type, Delegate>();
-        static Type _interface = typeof(IRepository);
+        static readonly ConcurrentDictionary<Type, PropertyInfo[]> _reflectionCache = new ConcurrentDictionary<Type, PropertyInfo[]>();
+        static readonly ConcurrentDictionary<Type, Delegate> _constructorCache = new ConcurrentDictionary<Type, Delegate>();
+        static readonly Type _interface = typeof(IRepository);
 
 
         // sql templates repository
@@ -49,13 +49,13 @@ namespace MicroRepository.Repository
 
             Type[] argumentTypes = args.Where(c => c != null).Select(c => c.GetType()).ToArray();
 
-            Delegate constructor = getConstructor(type, argumentTypes);
+            Delegate constructor = GetConstructor(type, argumentTypes);
 
             _constructorCache.TryAdd(type, constructor);
             return constructor.DynamicInvoke(args);
         }
 
-        static Delegate getConstructor(Type type, Type[] parametersType)
+        static Delegate GetConstructor(Type type, Type[] parametersType)
         {
             // Get the Constructor which matches the given argument Types:
             ConstructorInfo constructor = type.GetConstructor( parametersType);

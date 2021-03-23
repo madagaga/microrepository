@@ -47,12 +47,15 @@ namespace MicroRepository.Schema
 
             var cachedProperties = MicroRepository.Core.Caching.ReflectionCache.GetProperties(targetType);
 
-
-            Members = targetType
-                        .GetProperties()
-                        .Where(p => p.GetSetMethod() != null && p.GetGetMethod() != null && !p.IsDefined(typeof(NotMappedAttribute)))
-                        .Select<PropertyInfo, DataBasePropertyAccessor>(p => new DataBasePropertyAccessor(cachedProperties[p.Name], TableName))
-                        .ToDictionary(p => p.Property.Name);
+            Members = cachedProperties.Values.
+                Where(c => !c.Property.IsDefined(typeof(NotMappedAttribute)))
+                .Select(p => new DataBasePropertyAccessor(p, TableName))
+                .ToDictionary(p => p.Name);
+            //Members = targetType
+            //            .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            //            .Where(p => p.GetSetMethod() != null && p.GetGetMethod() != null && !p.IsDefined(typeof(NotMappedAttribute)))
+            //            .Select<PropertyInfo, DataBasePropertyAccessor>(p => new DataBasePropertyAccessor(cachedProperties[p.Name], TableName))
+            //            .ToDictionary(p => p.Property.Name);
 
 
             var template = RepositoryDiscoveryService.Template;
