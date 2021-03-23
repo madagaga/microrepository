@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
 
 namespace MicroRepository.Repository
 {
@@ -18,8 +16,11 @@ namespace MicroRepository.Repository
                     parameter = ParseBinary((BinaryExpression)body, linkingType);
                 else if (body is MethodCallExpression)
                     parameter = ParseMethodCall((MethodCallExpression)body, linkingType);
+                else if (body is MemberExpression)
+                    parameter = ParseMember((MemberExpression)body, linkingType);
                 else if (body is UnaryExpression)
                     parameter = ParseUnary((UnaryExpression)body, linkingType);
+
                 else
                     throw new NotSupportedException(string.Format("{0} is not supported", body.Type));
 
@@ -41,17 +42,29 @@ namespace MicroRepository.Repository
 
         }
 
-        internal static string GetPropertyName(BinaryExpression body)
+        internal static string GetPropertyName(Expression body)
         {
-            string propertyName = body.Left.ToString().Split('.')[1];
+            string propertyName = string.Empty;
+            if (body is MemberExpression)
+            {
+                MemberExpression expression = body as MemberExpression;
+                var dict = Caching.TableDefinitionCache.GetPropertiesDictionary(expression.Member.DeclaringType);
+                propertyName = dict[expression.Member.Name].EnquotedFullName;
+            }
+            else if(body is MethodCallExpression)
+            {
+                MethodCallExpression expression = body as MethodCallExpression;
+                return GetPropertyName(expression.Object);
+            }
             
-            // hack to remove the trailing ) when convering.
-            if (body.Left.NodeType == ExpressionType.Convert)
-                propertyName = propertyName.Replace(")", string.Empty);
-            
-             // hack for mono 
-            if (propertyName.IndexOf(',') > -1)
-                propertyName = propertyName.Split(',')[0].Trim();
+
+            //// hack to remove the trailing ) when convering.
+            //if (body.NodeType == ExpressionType.Convert)
+            //    propertyName = propertyName.TrimEnd(')');
+
+            //// hack for mono 
+            //if (propertyName.IndexOf(',') > -1)
+            //    propertyName = propertyName.Split(',')[0].Trim();
 
             return propertyName;
         }
@@ -63,44 +76,54 @@ namespace MicroRepository.Repository
             // by default it's LIKE;
             parameter.QueryOperator = linkingType == ExpressionType.NotEqual ? "NOT LIKE" : "LIKE";
 
+            parameter.PropertyName = GetPropertyName(methodCallExpression.Object);
+            parameter.PropertyValue = GetValue(methodCallExpression.Arguments[0]);
+
             string format = string.Empty;
             switch (methodCallExpression.Method.Name)
             {
                 case "Contains":
-                    format = "%{0}%";
+                    parameter.PropertyValue = $"%{parameter.PropertyValue}%";
                     break;
                 case "EndsWith":
-                    format = "%{0}";
+                    parameter.PropertyValue = $"{parameter.PropertyValue}%";
                     break;
                 case "StartsWith":
-                    format = "{0}%";
+                    parameter.PropertyValue = $"%{parameter.PropertyValue}";
                     break;
                 // not working well 
                 case "HasFlag":
                     parameter.QueryOperator = linkingType == ExpressionType.NotEqual ? "<>" : "=";
-                    parameter.PropertyFormat = "({0} & @p{1})";
+                    parameter.PropertyFormat = $"({parameter.PropertyName} & @p{{0}})";
                     break;
                 default:
                     throw new NotSupportedException(string.Format("{0} is not supported", methodCallExpression.Method.Name));
             }
 
-
-            parameter.PropertyName = methodCallExpression.Object.ToString().Split('.')[1];
-            parameter.PropertyValue = GetValue(methodCallExpression.Arguments[0]);// string.Format(format, ((ConstantExpression)methodCallExpression.Arguments[0]).Value);
-
-            if (!string.IsNullOrEmpty(format))
-                parameter.PropertyValue = string.Format(format, parameter.PropertyValue);
             return parameter;
         }
 
         internal static QueryParameter ParseUnary(UnaryExpression body, ExpressionType linkingType)
         {
             QueryParameter parameter = new QueryParameter();
-            parameter = ParseMethodCall((MethodCallExpression)body.Operand, body.NodeType == ExpressionType.Not ? ExpressionType.NotEqual : ExpressionType.Call);
+            if(body.Operand is MethodCallExpression)
+                parameter = ParseMethodCall((MethodCallExpression)body.Operand, body.NodeType == ExpressionType.Not ? ExpressionType.NotEqual : ExpressionType.Call);
+            else if(body.Operand is MemberExpression)
+                parameter = ParseMember((MemberExpression)body.Operand, body.NodeType == ExpressionType.Not ? ExpressionType.NotEqual : ExpressionType.Call);
+
             parameter.LinkingOperator = GetOperator(linkingType);
             return parameter;
         }
 
+        private static QueryParameter ParseMember(MemberExpression body, ExpressionType linkingType)
+        {
+            QueryParameter parameter = new QueryParameter();
+
+            parameter.PropertyName = GetPropertyName(body);
+            parameter.PropertyValue = linkingType == ExpressionType.Not ? "False" : "True";
+            parameter.QueryOperator = GetOperator(ExpressionType.Equal);
+            return parameter;
+        }
 
         internal static QueryParameter ParseBinary(BinaryExpression body, ExpressionType linkingType)
         {
@@ -129,20 +152,12 @@ namespace MicroRepository.Repository
             }
 
 
-            parameter.PropertyName = GetPropertyName(body);
-
+            parameter.PropertyName = GetPropertyName(body.Left);
+            //if(body.Right.NodeType == ExpressionType.MemberAccess)
+            //    parameter.PropertyValue = GetPropertyName(body.Right);
+            //else
             parameter.PropertyValue = GetValue(body.Right);
-            /*
-            if (body.Right is ConstantExpression)
-                value = ((ConstantExpression)body.Right).Value;
-            else if (body.Right is MethodCallExpression || body.Right.NodeType == ExpressionType.Convert)
-                value = Expression.Lambda(body.Right).Compile().DynamicInvoke();
-            else
-            {
-                MemberExpression propertyValue = (MemberExpression)body.Right;
-                value = System.Linq.Expressions.Expression.Lambda(propertyValue).Compile().DynamicInvoke();
-            }
-            */
+
             parameter.QueryOperator = GetOperator(body.NodeType);
             parameter.LinkingOperator = GetOperator(linkingType);
 
@@ -163,10 +178,20 @@ namespace MicroRepository.Repository
                 value = ((ConstantExpression)expr).Value;
             else if (expr is MethodCallExpression || expr.NodeType == ExpressionType.Convert)
                 value = Expression.Lambda(expr).Compile().DynamicInvoke();
-            else
+            else if(expr is MemberExpression)
             {
                 MemberExpression propertyValue = (MemberExpression)expr;
-                value = System.Linq.Expressions.Expression.Lambda(propertyValue).Compile().DynamicInvoke();
+                switch(propertyValue.Expression.NodeType)
+                {
+                    case ExpressionType.Constant:
+                    case ExpressionType.MemberAccess:
+                        value = Expression.Lambda(propertyValue).Compile().DynamicInvoke();
+                        break;
+                    case ExpressionType.Parameter:
+                        value = GetPropertyName(propertyValue);
+                        break;
+                }                
+                
             }
             return value;
         }

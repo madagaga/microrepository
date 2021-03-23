@@ -7,6 +7,6 @@
   <Delete>DELETE FROM {0} /**where**/</Delete>  
   <Identity>SELECT SCOPE_IDENTITY();</Identity>
   <QuoteChar>[{0}]</QuoteChar>
-  <Take>OFFSET 10 ROWS</Take>
-  <Skip>FETCH NEXT m ROWS ONLY</Skip>
+  <Take>OFFSET {0} ROWS</Take>
+  <Skip>FETCH NEXT {0} ROWS ONLY</Skip>
 </SqlTemplate>

@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using System.Linq.Expressions;
 
 namespace MicroRepository.Schema
 {
-    public class Delta<T> where T :class
+    public class Delta<T> where T : class
     {
 
         private readonly Dictionary<string, DataBasePropertyAccessor> _propertiesThatExist;
@@ -28,7 +24,7 @@ namespace MicroRepository.Schema
             _entityType = typeof(T);
             _propertiesThatExist = Caching.TableDefinitionCache.GetPropertiesDictionary(typeof(T));
             _ignoredProperties = new HashSet<string>();
-            
+
         }
 
         public Delta<T> Exclude(string propertyName)
@@ -39,7 +35,7 @@ namespace MicroRepository.Schema
                 throw new InvalidOperationException("Property '" + propertyName + "' is not a member of '" + _entityType.Name + "'");
             return this;
         }
-               
+
 
         /// <summary>
         /// Overwrites the <paramref name="original"/> entity with the changes tracked by this Delta.
@@ -81,22 +77,22 @@ namespace MicroRepository.Schema
                 propertyToCopy.Copy(_entity, original);
             }
         }
-                
-               
+
+
         /// <summary>
         /// Returns the Properties that have been modified through this Delta as an 
         /// enumeration of Property Names 
         /// </summary>
         public IEnumerable<string> GetChangedPropertyNames()
-        {   
+        {
             return _changedProperties;
         }
 
         public void Compare(T original, bool excludeNull = true)
-        {   
+        {
             _changedProperties = new HashSet<string>();
             object v1, v2;
-            foreach(var property in _propertiesThatExist.Where(c=>!_ignoredProperties.Contains(c.Key) ))
+            foreach (var property in _propertiesThatExist.Where(c => !_ignoredProperties.Contains(c.Key)))
             {
                 v1 = property.Value.Get(_entity);
                 v2 = property.Value.Get(original);
@@ -104,12 +100,12 @@ namespace MicroRepository.Schema
                 {
                     if (excludeNull)
                         continue;
-                    else if(v2 != null)
+                    else if (v2 != null)
                         _changedProperties.Add(property.Key);
                 }
                 else if (!v1.Equals(v2))
-                        _changedProperties.Add(property.Key);
-                
+                    _changedProperties.Add(property.Key);
+
             }
         }
 
@@ -123,11 +119,11 @@ namespace MicroRepository.Schema
         }
 
         public DataBasePropertyAccessor[] GetChangedProperties()
-        {            
+        {
             return _changedProperties.Select(c => _propertiesThatExist[c]).ToArray();
         }
 
-        
+
 
     }
 

@@ -1,10 +1,6 @@
 ﻿using MicroRepository.Sql;
-using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Text;
 
 namespace MicroRepository.Repository.Interfaces
 {
@@ -33,9 +29,9 @@ namespace MicroRepository.Repository.Interfaces
         /// <param name="item"></param>
         /// <returns></returns>
         bool Remove(TEntity item);
-        TEntity Update(TEntity item);        
+        TEntity Update(TEntity item);
         TEntity Find(params object[] orderedKeyValues);
-        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);            
+        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);
     }
 }
 

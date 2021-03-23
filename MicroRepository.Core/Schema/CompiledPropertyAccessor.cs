@@ -55,7 +55,7 @@ namespace MicroRepository.Core.Schema
             }
             catch (Exception e)
             {
-                throw new Exception($"Unable to set value'{value}' on property {Property.Name}", e);
+                throw new Exception($"Unable to set value '{value}' on property {Property.Name}", e);
             }
         }
 

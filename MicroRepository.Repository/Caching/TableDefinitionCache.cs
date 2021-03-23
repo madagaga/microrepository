@@ -2,9 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace MicroRepository.Caching
 {
@@ -24,7 +21,7 @@ namespace MicroRepository.Caching
 
         internal static Dictionary<string, DataBasePropertyAccessor> GetPropertiesDictionary(Type t)
         {
-            
+
             return GetTableDefinition(t).Members;
         }
     }

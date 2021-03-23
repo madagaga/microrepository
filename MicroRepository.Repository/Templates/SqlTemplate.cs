@@ -22,7 +22,7 @@ namespace MicroRepository.Templates
             return string.Format(QuoteChar, column);
         }
 
-       internal static SqlTemplate Load(string dbType)
+        internal static SqlTemplate Load(string dbType)
         {
             object template = Resources.ResourceManager.GetObject(dbType);
             SqlTemplate result = null;

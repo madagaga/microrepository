@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace MicroRepository.Repository
 {
-    public partial class Repository<TEntity> : IRepository<TEntity> where TEntity: class
+    public partial class Repository<TEntity> : IRepository<TEntity> where TEntity : class
     {
 
         private readonly TableDefinition _tableDefinition;
@@ -26,7 +26,7 @@ namespace MicroRepository.Repository
 
             _tableDefinition = TableDefinitionCache.GetTableDefinition(targetType);
 
-            this._keyColumns = _tableDefinition.Members.Values.Where(c => c.IsPrimaryKey).ToArray();            
+            this._keyColumns = _tableDefinition.Members.Values.Where(c => c.IsPrimaryKey).ToArray();
         }
 
 
@@ -41,7 +41,7 @@ namespace MicroRepository.Repository
 
 
         public virtual TEntity Add(TEntity item)
-        {            
+        {
             SqlBuilder builder = new SqlBuilder(_tableDefinition.InsertTemplate);
             builder.AddParameter(item);
             lock (_syncObj)
@@ -56,7 +56,7 @@ namespace MicroRepository.Repository
                 else
                 {
                     int lc = Connection.Execute(builder.RawSql, builder.Parameters);
-                    if(lc>0)
+                    if (lc > 0)
                     {
                         if (_keyColumns.Length > 0)
                         {
@@ -78,13 +78,13 @@ namespace MicroRepository.Repository
         {
             SqlBuilder builder = new SqlBuilder(_tableDefinition.DeleteTemplate);
             BindKeyColumn(item, builder);
-            lock (_syncObj)            
-            return Connection.Execute(builder.RawSql, builder.Parameters) != 0;
+            lock (_syncObj)
+                return Connection.Execute(builder.RawSql, builder.Parameters) != 0;
         }
 
         public virtual TEntity Update(TEntity item)
         {
-            SqlBuilder builder = null; 
+            SqlBuilder builder = null;
             lock (_syncObj)
             {
                 if (RepositoryDiscoveryService.UpdateChangeOnly)
@@ -111,7 +111,7 @@ namespace MicroRepository.Repository
                 }
                 else
                 {
-                    
+
                     builder = new SqlBuilder(_tableDefinition.UpdateTemplate);
                     builder.AddParameter(item);
                     BindKeyColumn(item, builder);
@@ -128,7 +128,7 @@ namespace MicroRepository.Repository
             }
         }
 
-        
+
         public virtual TEntity Find(params object[] orderedKeyValues)
         {
             if (_keyColumns.Length == 0)
@@ -158,12 +158,12 @@ namespace MicroRepository.Repository
             lock (_syncObj)
                 return Connection.Query<TEntity>(sqlQuery, new DynamicParameter(parameter));
         }
-        
-
-#endregion
 
 
-#region helpers        
+        #endregion
+
+
+        #region helpers        
 
         void BindKeyColumn(TEntity item, SqlBuilder builder)
         {

@@ -9,7 +9,7 @@ using System.Reflection;
 
 namespace MicroRepository.Repository
 {
-    internal static class RepositoryDiscoveryService
+    public static class RepositoryDiscoveryService
     {
         static readonly ConcurrentDictionary<Type, PropertyInfo[]> _reflectionCache = new ConcurrentDictionary<Type, PropertyInfo[]>();
         static readonly ConcurrentDictionary<Type, Delegate> _constructorCache = new ConcurrentDictionary<Type, Delegate>();
@@ -17,8 +17,8 @@ namespace MicroRepository.Repository
 
 
         // sql templates repository
-        public static void Initialize(Repositories context)
-        {   
+        internal static void Initialize(Repositories context)
+        {
 
             // initialize all dbsets
 
@@ -27,7 +27,7 @@ namespace MicroRepository.Repository
             PropertyInfo[] properties = null;
             if (!_reflectionCache.ContainsKey(repositoryManagerType))
             {
-                properties = repositoryManagerType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(c => c.PropertyType.GetInterfaces().Contains(_interface)).ToArray();                
+                properties = repositoryManagerType.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(c => c.PropertyType.GetInterfaces().Contains(_interface)).ToArray();
                 _reflectionCache.TryAdd(repositoryManagerType, properties);
             }
             else
@@ -58,7 +58,7 @@ namespace MicroRepository.Repository
         static Delegate GetConstructor(Type type, Type[] parametersType)
         {
             // Get the Constructor which matches the given argument Types:
-            ConstructorInfo constructor = type.GetConstructor( parametersType);
+            ConstructorInfo constructor = type.GetConstructor(parametersType);
 
             if (constructor == null)
                 throw new ArgumentException("No constructor exist with this paramater");
@@ -88,7 +88,7 @@ namespace MicroRepository.Repository
         }
 
         static DatabaseType _dataBaseType = DatabaseType.Auto;
-        internal static DatabaseType DataBaseType
+        public static DatabaseType DataBaseType
         {
             get { return _dataBaseType; }
             set

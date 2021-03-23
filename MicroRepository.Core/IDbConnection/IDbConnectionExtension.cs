@@ -104,8 +104,8 @@ namespace MicroRepository.Core.Sql
 
                         foreach (var kvp in types)
                         {
-                            if (PrimitiveTypes.IsPrimitive(kvp.Value.Type))
-                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key], kvp.Value.Type));
+                            if (PrimitiveTypes.IsPrimitive(kvp.Value.Type) && rowData[kvp.Key] != DBNull.Value)
+                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key], kvp.Value.Type));
                             else
                                 kvp.Value.Set(instance, rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key]);
                         }
@@ -307,23 +307,25 @@ namespace MicroRepository.Core.Sql
         }
 
         static Dictionary<int, CompiledPropertyAccessor<object>>  GetCachedMapping(IDbCommand command, IDataReader reader, Type targetType)
-        {            
+        {
             // compute hash 
             string hash = Hash(command.CommandText);
-            if(!_sqlPropertyMappingCache.ContainsKey(hash))                            
-            {
-                var properties = ReflectionCache.GetProperties(targetType).ToDictionary(c => c.Key.ToLower(), c => c.Value);
-                Dictionary<int, CompiledPropertyAccessor<object>> types = new Dictionary<int, CompiledPropertyAccessor<object>>();
-                string columnName;
-                for (int i = 0; i < reader.FieldCount; i++)
+            lock (_sqlPropertyMappingCache)
+            {                
+                if (!_sqlPropertyMappingCache.ContainsKey(hash))
                 {
-                    columnName = reader.GetName(i).ToLower();
-                    if (properties.ContainsKey(columnName))
-                        types.Add(i, properties[columnName]);
+                    var properties = ReflectionCache.GetProperties(targetType).ToDictionary(c => c.Key.ToLower(), c => c.Value);
+                    Dictionary<int, CompiledPropertyAccessor<object>> types = new Dictionary<int, CompiledPropertyAccessor<object>>();
+                    string columnName;
+                    for (int i = 0; i < reader.FieldCount; i++)
+                    {
+                        columnName = reader.GetName(i).ToLower();
+                        if (properties.ContainsKey(columnName))
+                            types.Add(i, properties[columnName]);
+                    }
+                    _sqlPropertyMappingCache.TryAdd(hash, types);
                 }
-                _sqlPropertyMappingCache.TryAdd(hash, types);
             }
-
             return _sqlPropertyMappingCache[hash];
 
         }

@@ -5,19 +5,16 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace MicroRepository.Schema
 {
     public class TableDefinition
-    {
-        public string ViewName { get; private set; }
+    {        
         public string TableName { get; private set; }
+        public string SelectTableName { get; private set; }
 
         public bool HasIdentity { get; private set; }
-
-        public bool HasView { get { return !string.IsNullOrEmpty(ViewName); } }
+                
         public Dictionary<string, DataBasePropertyAccessor> Members { get; private set; }
 
         public string SelectTemplate { get; private set; }
@@ -30,6 +27,9 @@ namespace MicroRepository.Schema
         public TableDefinition(Type targetType, string name = null)
         {
             TypeInfo targetTypeInfo = targetType.GetTypeInfo();
+            string viewName = string.Empty;
+            var template = RepositoryDiscoveryService.Template;
+
             if (!string.IsNullOrEmpty(name))
                 TableName = name;
             else
@@ -40,9 +40,15 @@ namespace MicroRepository.Schema
                 else
                     TableName = targetType.Name;
 
-                attr = targetTypeInfo.GetCustomAttribute <ViewAttribute>();
+                attr = targetTypeInfo.GetCustomAttribute<ViewAttribute>();
                 if (attr != null)
-                    ViewName = ((ViewAttribute)attr).Name;
+                {
+                    viewName = ((ViewAttribute)attr).Name;
+                    SelectTableName = $"{template.Enquote(viewName)} AS {template.Enquote(TableName)}";
+                }
+                else
+                    SelectTableName = template.Enquote(TableName);
+                
             }
 
             var cachedProperties = MicroRepository.Core.Caching.ReflectionCache.GetProperties(targetType);
@@ -51,45 +57,38 @@ namespace MicroRepository.Schema
                 Where(c => !c.Property.IsDefined(typeof(NotMappedAttribute)))
                 .Select(p => new DataBasePropertyAccessor(p, TableName))
                 .ToDictionary(p => p.Name);
-            //Members = targetType
-            //            .GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            //            .Where(p => p.GetSetMethod() != null && p.GetGetMethod() != null && !p.IsDefined(typeof(NotMappedAttribute)))
-            //            .Select<PropertyInfo, DataBasePropertyAccessor>(p => new DataBasePropertyAccessor(cachedProperties[p.Name], TableName))
-            //            .ToDictionary(p => p.Property.Name);
 
 
-            var template = RepositoryDiscoveryService.Template;
+            
 
             // identity
             HasIdentity = Members.Values.Any(c => c.IsIdentity);
 
-            // select 
-            if (HasView)
-                SelectTemplate = string.Format(template.Select, template.Enquote(ViewName) + ".*", template.Enquote(ViewName));
-            else
-                SelectTemplate = string.Format(template.Select, string.Join(", ", Members.Values.Select(c => c.SelectString)), template.Enquote(TableName));
             
+            // select 
+            if (!string.IsNullOrEmpty(viewName))
+                SelectTemplate = string.Format(template.Select, template.Enquote(TableName) + ".*", SelectTableName);
+            else
+                SelectTemplate = string.Format(template.Select, string.Join(", ", Members.Values.Select(c => c.SelectString)), SelectTableName);
+
             //count 
-            if(HasView)                             
-                CountTemplate =  string.Format(template.Select, "COUNT(*)", template.Enquote(ViewName));
-            else 
-                CountTemplate =  string.Format(template.Select, "COUNT(*)", template.Enquote(TableName));
+                CountTemplate = string.Format(template.Select, "COUNT(*)", SelectTableName);
 
             // delete 
             DeleteTemplate = string.Format(template.Delete, template.Enquote(TableName));
-            
+
             // update            
-            UpdateTemplate =  string.Format(template.Update, template.Enquote(TableName), string.Join(",", Members.Values.Where(c=>!c.IsPrimaryKey).Select(c=>c.UpdateString)));
+            UpdateTemplate = string.Format(template.Update, template.Enquote(TableName), string.Join(",", Members.Values.Where(c => !c.IsPrimaryKey).Select(c => c.UpdateString)));
 
             // insert
-            string tpl = template.Insert;            
+            string tpl = template.Insert;
             if (Members.Any(c => c.Value.IsIdentity))
                 tpl += template.Identity;
 
             IEnumerable<string> dbCols = Members.Values.Where(c => !c.IsIdentity).Select(c => c.EnquotedDbName);
             IEnumerable<string> objectCols = Members.Values.Where(c => !c.IsIdentity).Select(c => string.Format("@{0}", c.Name));
 
-            InsertTemplate = string.Format(tpl, template.Enquote(TableName), string.Join(", ",dbCols), string.Join(", ", objectCols));            
+            InsertTemplate = string.Format(tpl, template.Enquote(TableName), string.Join(", ", dbCols), string.Join(", ", objectCols));
 
 
         }

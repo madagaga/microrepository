@@ -6,17 +6,17 @@ using System.Data;
 
 namespace MicroRepository.Sql
 {
-    public partial class EnumerableRepository<TEntity> 
+    public partial class EnumerableRepository<TEntity>
     {
         private readonly string _selectTemplate;
         private readonly object _syncObj = new object();
         internal EnumerableRepository(IDbConnection connection)
         {
             Connection = connection ?? throw new ArgumentNullException("connection");
-            _selectTemplate = TableDefinitionCache.GetTableDefinition(typeof(TEntity)).SelectTemplate;            
-            
+            _selectTemplate = TableDefinitionCache.GetTableDefinition(typeof(TEntity)).SelectTemplate;
+
         }
-       
+
         #region IQueryableRepository Member
         Sql.SqlBuilder _internalBuilder;
         internal Sql.SqlBuilder InternalBuilder
@@ -30,7 +30,7 @@ namespace MicroRepository.Sql
         }
 
         public IDbConnection Connection { get; private set; }
-        internal bool Enumerated { get;  set; }
+        internal bool Enumerated { get; set; }
         #endregion
 
         #region IEnumerable
@@ -58,6 +58,6 @@ namespace MicroRepository.Sql
         }
         #endregion
 
-        
+
     }
 }
