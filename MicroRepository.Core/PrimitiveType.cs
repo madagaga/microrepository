@@ -13,8 +13,7 @@ namespace MicroRepository.Core
         static PrimitiveTypes()
         {
             var types = new[]
-                           {
-                              typeof (Enum),
+                           {                              
                               typeof (String),
                               typeof (Char),
                               typeof (Guid),

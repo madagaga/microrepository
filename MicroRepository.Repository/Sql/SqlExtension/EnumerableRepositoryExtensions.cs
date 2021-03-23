@@ -18,44 +18,117 @@ namespace MicroRepository.Sql
                 throw new InvalidOperationException("Sql query has already been executed. You can not add new clauses");
         }
 
-
+        /// <summary>
+        /// Add Raw SQL and returns a <see cref="EnumerableRepository{T}"/>
+        /// </summary>
+        /// <param name="sql">sql to execute</param>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
         public EnumerableRepository<TEntity> AndRawSql( string sql)
         {
             CheckExecution();
             this.InternalBuilder.Where(sql);
             return this;
         }
+
+        /// <summary>
+        /// Add Raw SQL and returns a <see cref="EnumerableRepository{T}"/>
+        /// </summary>
+        /// <param name="sql">sql to execute</param>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
         public EnumerableRepository<TEntity> OrRawSql( string sql) 
         {
             CheckExecution();
             this.InternalBuilder.OrWhere(sql);
             return this;
         }
-                
 
-        public EnumerableRepository<TEntity> In<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
+        /// <summary>
+        /// Add a Where in clause
+        /// </summary>
+        /// <param name="selector">column selector </param>
+        /// <param name="search">array of data </param>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
+        public EnumerableRepository<TEntity> In<TKey>( Expression<Func<TEntity, TKey>> selector, object[] search)
         {
             CheckExecution();
             MemberExpression body = (MemberExpression)selector.Body;
-            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(T))[body.Member.Name].EnquotedDbName;
-            this.InternalBuilder.Where(string.Format("{0} IN @In", column), new { In = search} );
+            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
+            List<string> indexes = new List<string>();
+            foreach (object o in search) 
+            {
+                indexes.Add($"@p{ this.InternalBuilder.Parameters.Count}");
+                this.InternalBuilder.AddParametersWithCount(o);
+            }
+            this.InternalBuilder.Where($"{column} IN ({string.Join(", ",indexes )})");
+            
             return this;
         }
 
-        public EnumerableRepository<TEntity> OrIn<T, TKey>( Expression<Func<T, TKey>> selector, object[] search)
+        public EnumerableRepository<TEntity> NotIn<TKey>(Expression<Func<TEntity, TKey>> selector, object[] search)
         {
             CheckExecution();
             MemberExpression body = (MemberExpression)selector.Body;
-            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(T))[body.Member.Name].EnquotedDbName;
-            this.InternalBuilder.OrWhere(string.Format("{0} IN @In", column), new { In = search });
+            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
+            List<string> indexes = new List<string>();
+            foreach (object o in search)
+            {
+                indexes.Add($"@p{ this.InternalBuilder.Parameters.Count}");
+                this.InternalBuilder.AddParametersWithCount(o);
+            }
+            this.InternalBuilder.Where($"{column} NOT IN ({string.Join(", ", indexes)})");
             return this;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="selector"></param>
+        /// <param name="search"></param>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
+        public EnumerableRepository<TEntity> OrIn<TKey>( Expression<Func<TEntity,TKey>> selector, object[] search)
+        {
+            CheckExecution();
+            MemberExpression body = (MemberExpression)selector.Body;
+            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
+            List<string> indexes = new List<string>();
+            foreach (object o in search)
+            {
+                indexes.Add($"@p{ this.InternalBuilder.Parameters.Count}");
+                this.InternalBuilder.AddParametersWithCount(o);
+            }
+            this.InternalBuilder.OrWhere($"{column} IN ({string.Join(", ", indexes)})");
+            return this;
+        }
+
+        public EnumerableRepository<TEntity> OrNotIn<TKey>(Expression<Func<TEntity, TKey>> selector, object[] search)
+        {
+            CheckExecution();
+            MemberExpression body = (MemberExpression)selector.Body;
+            string column = TableDefinitionCache.GetPropertiesDictionary(typeof(TEntity))[body.Member.Name].EnquotedDbName;
+            List<string> indexes = new List<string>();
+            foreach (object o in search)
+            {
+                indexes.Add($"@p{ this.InternalBuilder.Parameters.Count}");
+                this.InternalBuilder.AddParametersWithCount(o);
+            }
+            this.InternalBuilder.OrWhere($"{column} NOT IN ({string.Join(", ", indexes)})");
+            return this;
+        }
+
+        /// <summary>
+        /// Add an equivalent of exists 
+        /// </summary>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
         public bool Any()
         {
             return this.Count() != 0;
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="predicate"></param>
+        /// <returns><see cref="EnumerableRepository{T}"/></returns>
         public bool Any(Expression<Func<TEntity, bool>> predicate)
         {
             return this.Count(predicate) != 0;

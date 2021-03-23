@@ -2,6 +2,7 @@
 using MicroRepository.Core.DynamicParameters;
 using MicroRepository.Core.Schema;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 
@@ -12,22 +13,14 @@ namespace MicroRepository.Core.Sql
 {
     public static class IDbConnectionExtension
     {
-        static DynamicParameter buildParameters(object[] parameters)
-        {
-            if (parameters != null && parameters.Length > 0)
-            {
+        static readonly ConcurrentDictionary<string, Dictionary<int, CompiledPropertyAccessor<object>>> _sqlPropertyMappingCache = new ConcurrentDictionary<string, Dictionary<int, CompiledPropertyAccessor<object>>>();
 
-                DynamicParameter result = new DynamicParameter();
-                for (int i = 0; i < parameters.Length; i++)
-                    result.Add($"p{i}", parameters[i]);
-                return result;
-            }
-            return null;
-        }
+       
         public static int Execute(this IDbConnection connection, string sql, params object[] parameters)
         {
             return Execute(connection, sql, buildParameters(parameters));
         }
+
         public static int Execute(this IDbConnection connection, string sql, DynamicParameter parameters = null)
         {
             lock (connection)
@@ -100,22 +93,23 @@ namespace MicroRepository.Core.Sql
             {
                 if (!PrimitiveTypes.IsPrimitive(targetType))
                 {
-                    var properties = ReflectionCache.GetProperties(targetType).ToDictionary(c=>c.Key.ToLower(), c=>c.Value);
                     T instance = default(T);
-                    List<string> columns = new List<string>();
-                    for (int i = 0; i < reader.FieldCount; i++)
-                        columns.Add(reader.GetName(i).ToLower());
-                    
+
+                    Dictionary<int, CompiledPropertyAccessor<object>> types = GetCachedMapping(command, reader, targetType);
                     object[] rowData = new object[reader.FieldCount];
                     while (reader.Read())
                     {
                         reader.GetValues(rowData);
-                        instance = (T)ReflectionCache.CreateInstance(targetType);                        
-                        for (int i = 0; i < columns.Count; i++)
+                        instance = (T)ReflectionCache.CreateInstance(targetType);
+
+                        foreach (var kvp in types)
                         {
-                            if (properties.ContainsKey(columns[i]))
-                                properties[columns[i]].Set(instance, rowData[i] is DBNull ? null : rowData[i]);
+                            if (PrimitiveTypes.IsPrimitive(kvp.Value.Type))
+                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key], kvp.Value.Type));
+                            else
+                                kvp.Value.Set(instance, rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key]);
                         }
+                                                
                         yield return instance;
                     }
                 }
@@ -298,7 +292,55 @@ namespace MicroRepository.Core.Sql
                 command.Parameters.Add(parameter);
             }            
         }
-                
+
+        static DynamicParameter buildParameters(object[] parameters)
+        {
+            if (parameters != null && parameters.Length > 0)
+            {
+
+                DynamicParameter result = new DynamicParameter();
+                for (int i = 0; i < parameters.Length; i++)
+                    result.Add($"p{i}", parameters[i]);
+                return result;
+            }
+            return null;
+        }
+
+        static Dictionary<int, CompiledPropertyAccessor<object>>  GetCachedMapping(IDbCommand command, IDataReader reader, Type targetType)
+        {            
+            // compute hash 
+            string hash = Hash(command.CommandText);
+            if(!_sqlPropertyMappingCache.ContainsKey(hash))                            
+            {
+                var properties = ReflectionCache.GetProperties(targetType).ToDictionary(c => c.Key.ToLower(), c => c.Value);
+                Dictionary<int, CompiledPropertyAccessor<object>> types = new Dictionary<int, CompiledPropertyAccessor<object>>();
+                string columnName;
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    columnName = reader.GetName(i).ToLower();
+                    if (properties.ContainsKey(columnName))
+                        types.Add(i, properties[columnName]);
+                }
+                _sqlPropertyMappingCache.TryAdd(hash, types);
+            }
+
+            return _sqlPropertyMappingCache[hash];
+
+        }
+
+        static string Hash(string content)
+        {
+            using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+            {
+                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(content);
+                byte[] hashBytes = md5.ComputeHash(inputBytes);
+
+                // Convert the byte array to hexadecimal string                    
+                return string.Join("", hashBytes.Select(c => c.ToString("X2")));
+            }
+        }
+
+
         #endregion
     }
 }
