@@ -29,8 +29,28 @@ namespace MicroRepository.Repository.Interfaces
         /// <param name="item"></param>
         /// <returns></returns>
         bool Remove(TEntity item);
+
+        /// <summary>
+        /// Updates element in database <seealso cref="RepositoryDiscoveryService.UpdateChangeOnly"/>
+        /// </summary>
+        /// <param name="item">item to upload </param>
+        /// <returns>element updated from database</returns>
         TEntity Update(TEntity item);
+
+        /// <summary>
+        /// Find an element by its primary key
+        /// class bust be decorated with KeyAttribute
+        /// </summary>
+        /// <param name="orderedKeyValues">primary key s</param>
+        /// <returns>Found element </returns>
         TEntity Find(params object[] orderedKeyValues);
+
+        /// <summary>
+        /// Execute a raw query 
+        /// </summary>
+        /// <param name="sqlQuery">sql query</param>
+        /// <param name="parameter">object parameter</param>
+        /// <returns>Found element</returns>
         IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);
     }
 }

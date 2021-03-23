@@ -152,11 +152,13 @@ namespace MicroRepository.Repository
             }
 
 
-            parameter.PropertyName = GetPropertyName(body.Left);
-            //if(body.Right.NodeType == ExpressionType.MemberAccess)
-            //    parameter.PropertyValue = GetPropertyName(body.Right);
-            //else
+            parameter.PropertyName = GetPropertyName(body.Left);            
             parameter.PropertyValue = GetValue(body.Right);
+            if(parameter.PropertyValue.ToString() == "[table]")
+            {
+                parameter.PropertyFormat = "[table]";
+                parameter.PropertyValue = GetPropertyName(body.Right);
+            }
 
             parameter.QueryOperator = GetOperator(body.NodeType);
             parameter.LinkingOperator = GetOperator(linkingType);
@@ -188,7 +190,7 @@ namespace MicroRepository.Repository
                         value = Expression.Lambda(propertyValue).Compile().DynamicInvoke();
                         break;
                     case ExpressionType.Parameter:
-                        value = GetPropertyName(propertyValue);
+                        value = "[table]";
                         break;
                 }                
                 

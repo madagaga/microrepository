@@ -65,13 +65,31 @@ namespace MicroRepository.Sql
             
             var joinTable = TableDefinitionCache.GetTableDefinition(typeof(TJoin));
             StringBuilder sqlchunk = new StringBuilder($"{RepositoryDiscoveryService.Template.Enquote(joinTable.TableName)} ON");
+
             foreach (QueryParameter item in queryProperties)
             {
                 sqlchunk.Append($"{item.LinkingOperator} ");
                 if (item.PropertyValue != null)
-                    sqlchunk.AppendFormat("{0} {1} {2} ", item.PropertyName, item.QueryOperator, item.PropertyValue);
+                {
+                    if (!string.IsNullOrEmpty(item.PropertyFormat))
+                    {
+                        if (item.PropertyFormat == "[table]")
+                        {
+                            sqlchunk.AppendFormat("{0} {1} {2} ", item.PropertyName, item.QueryOperator, item.PropertyValue);
+                            continue;
+                        }
+                        else
+                        {
+                            sqlchunk.AppendFormat(item.PropertyFormat, InternalBuilder.Parameters.Count);
+                            sqlchunk.AppendFormat("{0} {1} ", item.QueryOperator, item.PropertyValue);
+                        }
+                    }
+                    else
+                        sqlchunk.AppendFormat("{0} {1} @p{2} ", item.PropertyName, item.QueryOperator, InternalBuilder.Parameters.Count);
+                    InternalBuilder.AddParametersWithCount(item.PropertyValue);
+                }
                 else
-                    sqlchunk.AppendFormat("{0} {1}", item.PropertyName, item.QueryOperator);
+                    sqlchunk.AppendFormat("{0} {1} ", item.PropertyName, item.QueryOperator);
             }
 
             return sqlchunk.ToString();

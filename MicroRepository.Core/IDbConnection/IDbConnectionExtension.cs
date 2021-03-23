@@ -101,11 +101,13 @@ namespace MicroRepository.Core.Sql
                     {
                         reader.GetValues(rowData);
                         instance = (T)ReflectionCache.CreateInstance(targetType);
-
+                        Type type = null;
                         foreach (var kvp in types)
                         {
-                            if (PrimitiveTypes.IsPrimitive(kvp.Value.Type) && rowData[kvp.Key] != DBNull.Value)
-                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key], kvp.Value.Type));
+                            type = Nullable.GetUnderlyingType(kvp.Value.Type) ?? kvp.Value.Type;
+
+                            if (PrimitiveTypes.IsPrimitive(type) && rowData[kvp.Key] != DBNull.Value)
+                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key], type));
                             else
                                 kvp.Value.Set(instance, rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key]);
                         }
