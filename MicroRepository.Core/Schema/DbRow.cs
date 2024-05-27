@@ -5,6 +5,10 @@ using System.Text;
 
 namespace MicroRepository.Core.Schema
 {
+
+    /// <summary>
+    /// Represents a row in a database table.
+    /// </summary>
     public class DbRow : Dictionary<string, object>
     {
 

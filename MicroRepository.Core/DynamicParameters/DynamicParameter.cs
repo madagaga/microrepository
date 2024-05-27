@@ -7,10 +7,20 @@ using System.Threading.Tasks;
 
 namespace MicroRepository.Core.DynamicParameters
 {
-    public class DynamicParameter:Dictionary<string, object>
+    /// <summary>
+    /// Represents a dynamic parameter dictionary.
+    /// </summary>
+    public class DynamicParameter : Dictionary<string, object>
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DynamicParameter"/> class.
+        /// </summary>
         public DynamicParameter() { }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DynamicParameter"/> class with the specified object.
+        /// </summary>
+        /// <param name="o">The object to add as dynamic parameters.</param>
         public DynamicParameter(object o)
         {
             if (o == null)
@@ -23,6 +33,10 @@ namespace MicroRepository.Core.DynamicParameters
             }
         }
 
+        /// <summary>
+        /// Adds dynamic parameters from an object.
+        /// </summary>
+        /// <param name="o">The object to add as dynamic parameters.</param>
         public void AddDynamicParams(object o)
         {
             if (o == null)
@@ -55,11 +69,15 @@ namespace MicroRepository.Core.DynamicParameters
             }
         }
 
+        /// <summary>
+        /// Merges the given dynamic parameters into the current instance.
+        /// </summary>
+        /// <param name="dynamicParameter">The dynamic parameters to merge.</param>
         public void Merge(Dictionary<string, object> dynamicParameter)
         {
-            foreach (KeyValuePair<string, object> kvp in dynamicParameter)                
+            foreach (KeyValuePair<string, object> kvp in dynamicParameter)
                 this[kvp.Key] = kvp.Value;
-                
+
         }
     }
 }

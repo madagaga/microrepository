@@ -6,6 +6,10 @@ namespace MicroRepository.Sql
     public class SqlClauseCollection : List<SqlClause>
     {
         public string KeyWord { get; set; }
+
+        ///<summary>
+        /// Returns a string representation of the SqlClauseCollection.
+        ///</summary>
         public override string ToString()
         {
             if (this.Count == 0)
@@ -17,8 +21,6 @@ namespace MicroRepository.Sql
                     sb.Append(this[i].Sql);
                 else
                     sb.Append($"{this[i].Joiner} {this[i].Sql}");
-
-
 
             return sb.ToString();
         }
