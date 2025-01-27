@@ -5,346 +5,186 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
-
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace MicroRepository.Core.Sql
 {
     public static class IDbConnectionExtension
     {
-        static readonly ConcurrentDictionary<string, Dictionary<int, CompiledPropertyAccessor<object>>> _sqlPropertyMappingCache = new ConcurrentDictionary<string, Dictionary<int, CompiledPropertyAccessor<object>>>();
+        private static readonly ConcurrentDictionary<string, Dictionary<int, CompiledPropertyAccessor<object>>> _sqlPropertyMappingCache = new();
 
-       
-        public static int Execute(this IDbConnection connection, string sql, params object[] parameters)
+        // Executes a query without results
+        public static int Execute(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
         {
-            return Execute(connection, sql, buildParameters(parameters));
-        }
+            ArgumentNullException.ThrowIfNull(connection, nameof(connection));
+            ArgumentNullException.ThrowIfNull(sql, nameof(sql));
 
-        public static int Execute(this IDbConnection connection, string sql, DynamicParameter parameters = null)
-        {
-            lock (connection)
-            {
-                try
-                {                    
-                    openConnection(connection);
-                    using (IDbCommand command = connection.CreateCommand())
-                    {
-                        buildParameters(command, parameters);
-                        command.CommandText = sql;
-                        return command.ExecuteNonQuery();                        
-                    }                    
-                }
-                catch (Exception e)
-                {
-                    throw e;
-                }
-                finally
-                {
-                    closeConnection(connection);
-                }
-            }
-        }
-
-        public static IEnumerable<T> Query<T>(this IDbConnection connection, string sql, params object[] parameters)
-        {
-            return Query<T>(connection, sql, buildParameters(parameters));
-        }
-        public static IEnumerable<T> Query<T>(this IDbConnection connection, string sql, DynamicParameter parameters = null, bool buffered = true)
-        {
-            if (connection == null)
-                throw new ArgumentNullException("connection");
-            if (string.IsNullOrEmpty(sql))
-                throw new ArgumentNullException("sql");
-            lock (connection)
-            {
-                try
-                {
-                    
-                    using (IDbCommand command = connection.CreateCommand())
-                    {
-                        buildParameters(command, parameters);
-                        command.CommandText = sql;
-                        if (buffered)
-                            return ExecuteReader<T>(command).ToList();
-                        else
-                            return ExecuteReader<T>(command);
-
-
-                    }
-                    
-                }
-                catch (Exception e)
-                {
-                    closeConnection(connection);
-                    throw new Exception("IEnumerable<T> Query<T>", e);                    
-                }
-                
-
-            }
-            
-        }
-
-        private static IEnumerable<T> ExecuteReader<T>(IDbCommand command, CommandBehavior commandBehavior = CommandBehavior.CloseConnection)
-        {
-            Type targetType = typeof(T);
-            openConnection(command.Connection);
-            using (IDataReader reader = command.ExecuteReader(commandBehavior))
-            {
-                if (!PrimitiveTypes.IsPrimitive(targetType))
-                {
-                    T instance = default(T);
-
-                    Dictionary<int, CompiledPropertyAccessor<object>> types = GetCachedMapping(command, reader, targetType);
-                    object[] rowData = new object[reader.FieldCount];
-                    while (reader.Read())
-                    {
-                        reader.GetValues(rowData);
-                        instance = (T)ReflectionCache.CreateInstance(targetType);
-                        Type type = null;
-                        foreach (var kvp in types)
-                        {
-                            type = Nullable.GetUnderlyingType(kvp.Value.Type) ?? kvp.Value.Type;
-
-                            if (PrimitiveTypes.IsPrimitive(type) && rowData[kvp.Key] != DBNull.Value)
-                                kvp.Value.Set(instance, Convert.ChangeType(rowData[kvp.Key], type));
-                            else
-                                kvp.Value.Set(instance, rowData[kvp.Key] is DBNull ? null : rowData[kvp.Key]);
-                        }
-                                                
-                        yield return instance;
-                    }
-                }
-                else
-                {
-                    while (reader.Read())
-                    {
-                        yield return (T)Convert.ChangeType(reader[0], Nullable.GetUnderlyingType(targetType) ?? targetType);
-                    }
-                }
-                
-            }
-            closeConnection(command.Connection);
-        }
-
-        public static T QueryFirst<T>(this IDbConnection connection, string sql, params object[] parameters)
-        {
-            return QueryFirst<T>(connection, sql, buildParameters(parameters));
-        }
-
-        public static T QueryFirst<T>(this IDbConnection connection, string sql, DynamicParameter parameters = null)
-        {
-            T instance = default(T);
-            lock (connection)
-            {
-                try
-                {
-
-                    using (IDbCommand command = connection.CreateCommand())
-                    {
-                        buildParameters(command, parameters);
-                        command.CommandText = sql;
-                        instance = ExecuteReader<T>(command, CommandBehavior.SingleResult).First();
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    closeConnection(connection);
-                    throw e;
-                }
-
-
-            }
-
-            return instance;
-        }
-
-        public static T QueryFirstOrDefault<T>(this IDbConnection connection, string sql, params object[] parameters)
-        {
-            return QueryFirstOrDefault<T>(connection, sql, buildParameters(parameters));
-        }
-        public static T QueryFirstOrDefault<T>(this IDbConnection connection, string sql, DynamicParameter parameters = null)
-        {
-            T instance = default(T);
             try
             {
-                instance = QueryFirst<T>(connection, sql, parameters);
+                connection.OpenIfNeeded();
+                using var command = connection.CreateCommand();
+                BindParameters(command, parameters);
+                command.CommandText = sql;
+                return command.ExecuteNonQuery();
             }
-            catch { }
-            return instance;
-        }
-
-        public static T ExecuteScalar<T>(this IDbConnection connection, string sql, params object[] parameters)
-        {
-            return ExecuteScalar<T>(connection, sql, buildParameters(parameters));
-        }
-        public static T ExecuteScalar<T>(this IDbConnection connection, string sql, DynamicParameter parameters = null)
-        {
-            lock (connection)
+            finally
             {
-                try
-                {
-                    openConnection(connection);
-                    using (IDbCommand command = connection.CreateCommand())
-                    {
-                        buildParameters(command, parameters);
-                        command.CommandText = sql;
-                        object result = command.ExecuteScalar();
-                        if (result == null)
-                            return default(T);
-                        else 
-                            return (T) Convert.ChangeType(result, typeof(T));
-                    }
-                }
-                catch (Exception e)
-                {
-                    throw e;
-                }
-                finally
-                {
-                    closeConnection(connection);
-                }
+                connection.CloseIfNeeded();
             }
         }
 
-
-
-        private static IEnumerable<DbRow> ExecuteReader(IDbCommand command, CommandBehavior commandBehavior = CommandBehavior.CloseConnection)
+        // Executes a query and returns a collection of T objects
+        public static IEnumerable<T> Query<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null, bool buffered = true)
         {
-            List<DbRow> result = new List<DbRow>();
-            openConnection(command.Connection);
-            using (IDataReader reader = command.ExecuteReader(commandBehavior))
-            {
-                List<string> columns = new List<string>();
-                for (int i = 0; i < reader.FieldCount; i++)
-                    columns.Add(reader.GetName(i));
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentNullException.ThrowIfNull(sql);
 
-                object[] rowData = new object[reader.FieldCount];
+            try
+            {
+                connection.OpenIfNeeded();
+                using var command = connection.CreateCommand();
+                BindParameters(command, parameters);
+                command.CommandText = sql;
+
+                var result = buffered
+                    ? ExecuteReader<T>(command).ToList()
+                    : ExecuteReader<T>(command);
+
+                return result;
+            }
+            finally
+            {
+                connection.CloseIfNeeded();
+            }
+        }
+
+        // Executes a query and returns the first row mapped to T
+        public static T QueryFirst<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
+        {
+            return Query<T>(connection, sql, parameters, true).First();
+        }
+
+        // Executes a query and returns the first row or default mapped to T
+        public static T? QueryFirstOrDefault<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
+        {
+            return Query<T>(connection, sql, parameters, true).FirstOrDefault();
+        }
+
+        // Executes a scalar query and returns a single value casted to T
+        public static T ExecuteScalar<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentNullException.ThrowIfNull(sql);
+
+            try
+            {
+                connection.OpenIfNeeded();
+                using var command = connection.CreateCommand();
+                BindParameters(command, parameters);
+                command.CommandText = sql;
+
+                var result = command.ExecuteScalar();
+                return result is null ? default! : (T)Convert.ChangeType(result, typeof(T));
+            }
+            finally
+            {
+                connection.CloseIfNeeded();
+            }
+        }
+
+        // Internal: Execute a reader and yield T objects
+        private static IEnumerable<T> ExecuteReader<T>(IDbCommand command, CommandBehavior behavior = CommandBehavior.CloseConnection)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+
+            var targetType = typeof(T);
+            command.Connection.OpenIfNeeded();
+
+            using var reader = command.ExecuteReader(behavior);
+            if (!targetType.IsPrimitiveType())
+            {
+                var cachedMapping = GetCachedMapping(command.CommandText, reader, targetType);
+                var rowData = new object[reader.FieldCount];
+
                 while (reader.Read())
                 {
                     reader.GetValues(rowData);
-                    result.Add(new DbRow(columns, rowData));
-                }
-            }
-            closeConnection(command.Connection);
-            return result;
-        }
+                    var instance = (T)ReflectionCache.CreateInstance(targetType);
 
-        public static IEnumerable<DbRow> Query(this IDbConnection connection, string sql, params object[] parameters)
-        {
-            return Query(connection, sql, buildParameters(parameters));
-        }
-
-        public static IEnumerable<DbRow> Query(this IDbConnection connection, string sql, DynamicParameter parameters = null)
-        {
-            if (connection == null)
-                throw new ArgumentNullException("connection");
-            if (string.IsNullOrEmpty(sql))
-                throw new ArgumentNullException("sql");
-            lock (connection)
-            {
-                try
-                {
-
-                    using (IDbCommand command = connection.CreateCommand())
+                    foreach (var kvp in cachedMapping)
                     {
-                        buildParameters(command, parameters);
-                        command.CommandText = sql;                        
-                        return ExecuteReader(command);
-
+                        var valueToSet = rowData[kvp.Key] is DBNull
+                            ? null
+                            : Convert.ChangeType(rowData[kvp.Key], kvp.Value.Type);
+                        kvp.Value.Set(instance, valueToSet);
                     }
 
+                    yield return instance;
                 }
-                catch (Exception e)
+            }
+            else
+            {
+                while (reader.Read())
                 {
-                    closeConnection(connection);
-                    throw new Exception("DbTable Query", e);
+                    yield return (T)Convert.ChangeType(reader[0], Nullable.GetUnderlyingType(targetType) ?? targetType);
                 }
-
-
             }
         }
 
-
-        #region internal
-        static void openConnection(IDbConnection _connection)
+        // Builds or retrieves mappings between reader columns and properties
+        private static Dictionary<int, CompiledPropertyAccessor<object>> GetCachedMapping(string sql, IDataReader reader, Type targetType)
         {
-            if (_connection != null && _connection.State != ConnectionState.Open)
-                _connection.Open();
+            if (!_sqlPropertyMappingCache.TryGetValue(sql, out var mapping))
+            {
+                var properties = ReflectionCache.GetProperties(targetType).ToDictionary(p => p.Key.ToLower(), p => p.Value);
+                var columnMapping = new Dictionary<int, CompiledPropertyAccessor<object>>();
+
+                for (var i = 0; i < reader.FieldCount; i++)
+                {
+                    var columnName = reader.GetName(i).ToLower();
+                    if (properties.TryGetValue(columnName, out var accessor))
+                    {
+                        columnMapping[i] = accessor;
+                    }
+                }
+
+                _sqlPropertyMappingCache[sql] = columnMapping;
+                return columnMapping;
+            }
+
+            return mapping;
         }
 
-        static void closeConnection(IDbConnection _connection)
+        // Parameter binding
+        private static void BindParameters(IDbCommand command, DynamicParameter? parameters)
         {
-            if (_connection != null && _connection.State != ConnectionState.Closed)
-                _connection.Close();
-        }
+            if (parameters is null) return;
 
-        static void buildParameters(IDbCommand command, DynamicParameter parameters = null)
-        {
-            if (parameters == null)
-                return;
-
-            IDbDataParameter parameter;            
-            foreach(var kvp in parameters)
-            {                
-                parameter = command.CreateParameter();
+            foreach (var kvp in parameters)
+            {
+                var parameter = command.CreateParameter();
                 parameter.ParameterName = kvp.Key;
-                parameter.Value = kvp.Value;
+                parameter.Value = kvp.Value ?? DBNull.Value;
                 command.Parameters.Add(parameter);
-            }            
+            }
         }
 
-        static DynamicParameter buildParameters(object[] parameters)
+        // Opens connection if not already open
+        private static void OpenIfNeeded(this IDbConnection connection)
         {
-            if (parameters != null && parameters.Length > 0)
+            if (connection.State != ConnectionState.Open)
             {
-
-                DynamicParameter result = new DynamicParameter();
-                for (int i = 0; i < parameters.Length; i++)
-                    result.Add($"p{i}", parameters[i]);
-                return result;
+                connection.Open();
             }
-            return null;
         }
 
-        static Dictionary<int, CompiledPropertyAccessor<object>>  GetCachedMapping(IDbCommand command, IDataReader reader, Type targetType)
+        // Closes connection if not already closed
+        private static void CloseIfNeeded(this IDbConnection connection)
         {
-            // compute hash 
-            string hash = Hash(command.CommandText);
-            lock (_sqlPropertyMappingCache)
-            {                
-                if (!_sqlPropertyMappingCache.ContainsKey(hash))
-                {
-                    var properties = ReflectionCache.GetProperties(targetType).ToDictionary(c => c.Key.ToLower(), c => c.Value);
-                    Dictionary<int, CompiledPropertyAccessor<object>> types = new Dictionary<int, CompiledPropertyAccessor<object>>();
-                    string columnName;
-                    for (int i = 0; i < reader.FieldCount; i++)
-                    {
-                        columnName = reader.GetName(i).ToLower();
-                        if (properties.ContainsKey(columnName))
-                            types.Add(i, properties[columnName]);
-                    }
-                    _sqlPropertyMappingCache.TryAdd(hash, types);
-                }
-            }
-            return _sqlPropertyMappingCache[hash];
-
-        }
-
-        static string Hash(string content)
-        {
-            using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+            if (connection.State != ConnectionState.Closed)
             {
-                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(content);
-                byte[] hashBytes = md5.ComputeHash(inputBytes);
-
-                // Convert the byte array to hexadecimal string                    
-                return string.Join("", hashBytes.Select(c => c.ToString("X2")));
+                connection.Close();
             }
         }
-
-
-        #endregion
     }
 }

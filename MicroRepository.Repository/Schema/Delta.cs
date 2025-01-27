@@ -5,134 +5,172 @@ using System.Linq.Expressions;
 
 namespace MicroRepository.Schema
 {
+    /// <summary>
+    /// Tracks changes between two instances of the same type and allows partial or full updates.
+    /// </summary>
     public class Delta<T> where T : class
     {
-
-        private readonly Dictionary<string, DataBasePropertyAccessor> _propertiesThatExist;
-        private HashSet<string> _changedProperties;
-        private readonly T _entity;
-        private readonly Type _entityType;
-
+        private readonly Dictionary<string, DataBasePropertyAccessor> _properties;
         private readonly HashSet<string> _ignoredProperties;
+        private readonly HashSet<string> _changedProperties;
+        private readonly T _entity;
 
         /// <summary>
-        /// Initializes a new instance of <see cref="Delta{T}"/>.
+        /// Initializes a new instance of the <see cref="Delta{T}"/> class.
         /// </summary>
-        public Delta(T changed)
+        /// <param name="entity">The entity representing the "changed" state.</param>
+        public Delta(T entity)
         {
-            _entity = changed;
-            _entityType = typeof(T);
-            _propertiesThatExist = Caching.TableDefinitionCache.GetPropertiesDictionary(typeof(T));
-            _ignoredProperties = new HashSet<string>();
+            ArgumentNullException.ThrowIfNull(entity);
 
+            _entity = entity;
+            _properties = Caching.TableDefinitionCache.GetPropertiesDictionary(typeof(T));
+            _ignoredProperties = new HashSet<string>();
+            _changedProperties = new HashSet<string>();
         }
 
+        /// <summary>
+        /// Excludes a property from being tracked.
+        /// </summary>
+        /// <param name="propertyName">The name of the property to exclude.</param>
+        /// <returns>The current <see cref="Delta{T}"/> instance for chaining.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property does not exist.</exception>
         public Delta<T> Exclude(string propertyName)
         {
-            if (_propertiesThatExist.ContainsKey(propertyName))
-                this._ignoredProperties.Add(propertyName);
-            else
-                throw new InvalidOperationException("Property '" + propertyName + "' is not a member of '" + _entityType.Name + "'");
+            if (!_properties.ContainsKey(propertyName))
+            {
+                throw new InvalidOperationException(
+                    $"Property '{propertyName}' is not a member of '{typeof(T).Name}'.");
+            }
+
+            _ignoredProperties.Add(propertyName);
             return this;
         }
 
-
         /// <summary>
-        /// Overwrites the <paramref name="original"/> entity with the changes tracked by this Delta.
-        /// <remarks>The semantics of this operation are equivalent to a HTTP PATCH operation, hence the name.</remarks>
+        /// Performs a partial update on the original entity using only the tracked changes.
         /// </summary>
-        /// <param name="original">The entity to be updated.</param>
+        /// <param name="original">The original entity to update.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the original entity is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the original entity type does not match <typeparamref name="T"/>.</exception>
         public void Patch(T original)
         {
-            if (original == null)
-            {
-                throw new ArgumentNullException("original");
-            }
+            ArgumentNullException.ThrowIfNull(original);
 
-            if (!_entityType.IsAssignableFrom(original.GetType()))
+            if (!_properties.ContainsKey(original.GetType().Name))
             {
-                throw new ArgumentException("Delta type mismatch", "original");
+                throw new ArgumentException($"Entity type mismatch: expected '{typeof(T).Name}'.", nameof(original));
             }
 
             Compare(original);
-            DataBasePropertyAccessor[] propertiesToCopy = GetChangedPropertyNames().Select(s => _propertiesThatExist[s]).ToArray();
-            foreach (DataBasePropertyAccessor propertyToCopy in propertiesToCopy)
+
+            foreach (var propertyAccessor in GetChangedPropertiesAccessors())
             {
-                propertyToCopy.Copy(_entity, original);
+                propertyAccessor.Copy(_entity, original);
             }
         }
 
         /// <summary>
-        /// Overwrites the <paramref name="original"/> entity with the values stored in this Delta.
-        /// <remarks>The semantics of this operation are equivalent to a HTTP PUT operation, hence the name.</remarks>
+        /// Performs a full update, copying all properties (both changed and unchanged).
         /// </summary>
-        /// <param name="original">The entity to be updated.</param>
+        /// <param name="original">The original entity to update.</param>
         public void Put(T original)
         {
             Patch(original);
 
-            DataBasePropertyAccessor[] propertiesToCopy = GetUnchangedPropertyNames().Select(s => _propertiesThatExist[s]).ToArray();
-            foreach (DataBasePropertyAccessor propertyToCopy in propertiesToCopy)
+            foreach (var propertyAccessor in GetUnchangedPropertiesAccessors())
             {
-                propertyToCopy.Copy(_entity, original);
+                propertyAccessor.Copy(_entity, original);
             }
         }
 
+        /// <summary>
+        /// Compares the tracked entity with the original one and determines the changed properties.
+        /// </summary>
+        /// <param name="original">The original entity to compare against.</param>
+        /// <param name="excludeNull">Whether to ignore null values during comparison.</param>
+        public void Compare(T original, bool excludeNull = true)
+        {
+            _changedProperties.Clear();
+
+            foreach (var property in _properties)
+            {
+                // Skip ignored properties
+                if (_ignoredProperties.Contains(property.Key)) continue;
+
+                var changedValue = property.Value.Get(_entity);
+                var originalValue = property.Value.Get(original);
+
+                if (changedValue == null)
+                {
+                    if (!excludeNull && originalValue != null)
+                    {
+                        _changedProperties.Add(property.Key);
+                    }
+                }
+                else if (!changedValue.Equals(originalValue))
+                {
+                    _changedProperties.Add(property.Key);
+                }
+            }
+        }
 
         /// <summary>
-        /// Returns the Properties that have been modified through this Delta as an 
-        /// enumeration of Property Names 
+        /// Gets the names of the properties that have been changed.
         /// </summary>
         public IEnumerable<string> GetChangedPropertyNames()
         {
-            return _changedProperties;
-        }
-
-        public void Compare(T original, bool excludeNull = true)
-        {
-            _changedProperties = new HashSet<string>();
-            object v1, v2;
-            foreach (var property in _propertiesThatExist.Where(c => !_ignoredProperties.Contains(c.Key)))
-            {
-                v1 = property.Value.Get(_entity);
-                v2 = property.Value.Get(original);
-                if (v1 == null)
-                {
-                    if (excludeNull)
-                        continue;
-                    else if (v2 != null)
-                        _changedProperties.Add(property.Key);
-                }
-                else if (!v1.Equals(v2))
-                    _changedProperties.Add(property.Key);
-
-            }
+            return _changedProperties.ToList();
         }
 
         /// <summary>
-        /// Returns the Properties that have not been modified through this Delta as an 
-        /// enumeration of Property Names 
+        /// Gets the accessors of the properties that have been changed.
+        /// </summary>
+        public IEnumerable<DataBasePropertyAccessor> GetChangedPropertiesAccessors()
+        {
+            return _changedProperties.Select(key => _properties[key]);
+        }
+
+        /// <summary>
+        /// Gets the names of the properties that have not been changed.
         /// </summary>
         public IEnumerable<string> GetUnchangedPropertyNames()
         {
-            return _propertiesThatExist.Keys.Except(GetChangedPropertyNames());
+            return _properties.Keys.Except(_changedProperties).ToList();
         }
 
-        public DataBasePropertyAccessor[] GetChangedProperties()
+        /// <summary>
+        /// Gets the accessors of the properties that have not been changed.
+        /// </summary>
+        public IEnumerable<DataBasePropertyAccessor> GetUnchangedPropertiesAccessors()
         {
-            return _changedProperties.Select(c => _propertiesThatExist[c]).ToArray();
+            return _properties.Keys
+                .Except(_changedProperties)
+                .Select(key => _properties[key]);
         }
-
-
-
     }
 
+    /// <summary>
+    /// Extension methods for <see cref="Delta{T}"/>.
+    /// </summary>
     public static class DeltaExtension
     {
-        public static Delta<T> Exclude<T, TKey>(this Delta<T> delta, Expression<Func<T, TKey>> selector) where T : class
+        /// <summary>
+        /// Excludes a property using a lambda expression selector.
+        /// </summary>
+        /// <typeparam name="T">The type of the entity.</typeparam>
+        /// <typeparam name="TKey">The type of the property.</typeparam>
+        /// <param name="delta">The Delta instance to modify.</param>
+        /// <param name="propertySelector">An expression selecting the property.</param>
+        /// <returns>The updated Delta instance.</returns>
+        public static Delta<T> Exclude<T, TKey>(this Delta<T> delta, Expression<Func<T, TKey>> propertySelector) where T : class
         {
-            MemberExpression body = (MemberExpression)selector.Body;
-            return delta.Exclude(body.Member.Name);
+            if (propertySelector.Body is not MemberExpression member)
+            {
+                throw new ArgumentException("Selector must be a valid member expression.", nameof(propertySelector));
+            }
+
+            return delta.Exclude(member.Member.Name);
         }
     }
 }

@@ -1,124 +1,161 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Reflection.Emit;
-using System.Text;
 
 namespace MicroRepository.Core.Schema
 {
-
-    
-// inspired by microsoft compiled property accessor
+    /// <summary>
+    /// Provides a compiled property accessor for a generic type,
+    /// enabling fast and efficient property access.
+    /// </summary>
+    /// <typeparam name="T">The type of the object containing the property.</typeparam>
     public class CompiledPropertyAccessor<T>
     {
-        private Action<T, object> _setter;
-        private Func<T, object> _getter;
-
-        public PropertyInfo Property
-        {
-            get;
-            private set;
-        }
-
-        public Type Type
-        {
-            get;
-            private set;
-        }
+        /// <summary>
+        /// Compiled function to set the property value.
+        /// </summary>
+        private readonly Action<T, object> _setter;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CompiledPropertyAccessor{T}"/> class.
+        /// Compiled function to get the property value.
         /// </summary>
-        /// <param name="property">The property for which to create the accessor.</param>
+        private readonly Func<T, object> _getter;
+
+        /// <summary>
+        /// Gets the reflected PropertyInfo for the accessed property.
+        /// </summary>
+        public PropertyInfo Property { get; }
+
+        /// <summary>
+        /// Gets the type of the property.
+        /// </summary>
+        public Type Type { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the CompiledPropertyAccessor.
+        /// </summary>
+        /// <param name="property">The property to create an accessor for.</param>
+        /// <exception cref="ArgumentNullException">Thrown when property is null.</exception>
         public CompiledPropertyAccessor(PropertyInfo property)
         {
-            Property = property;
+            Property = property ?? throw new ArgumentNullException(nameof(property));
             Type = property.PropertyType;
-            _setter = MakeSetter(property);
-            _getter = MakeGetter(property);
+
+            _setter = CreateSetter(property);
+            _getter = CreateGetter(property);
         }
 
         /// <summary>
-        /// Gets the value of the property for the specified entity.
+        /// Retrieves the value of the property for a given entity.
         /// </summary>
-        /// <param name="entity">The entity from which to get the property value.</param>
-        /// <returns>The value of the property.</returns>
-        public object Get(T entity)
-        {
-            if (entity == null)
-                throw new ArgumentNullException("entity");
-            return _getter(entity);
-        }
+        /// <param name="entity">The entity to get the property value from.</param>
+        /// <returns>The property value.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        public object Get(T entity) =>
+            entity is null
+                ? throw new ArgumentNullException(nameof(entity))
+                : _getter(entity);
 
         /// <summary>
-        /// Sets the value of the property for the specified entity.
+        /// Sets the value of the property for a given entity.
         /// </summary>
-        /// <param name="entity">The entity for which to set the property value.</param>
+        /// <param name="entity">The entity to set the property value on.</param>
         /// <param name="value">The value to set.</param>
-        public void Set(T entity, object value)
+        /// <exception cref="ArgumentNullException">Thrown when entity is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when setting the value fails.</exception>
+        public void Set(T entity, object? value)
         {
-            if (entity == null)
-                throw new ArgumentNullException("entity");
+            ArgumentNullException.ThrowIfNull(entity);
 
             try
             {
                 _setter(entity, value);
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                throw new Exception($"Unable to set value '{value}' on property {Property.Name}", e);
+                throw new InvalidOperationException(
+                    $"Unable to set value '{value}' on property {Property.Name}",
+                    ex);
             }
         }
 
         /// <summary>
-        /// Creates a setter function for the specified property.
+        /// Copies the property value from one entity to another.
         /// </summary>
-        /// <param name="property">The property for which to create the setter.</param>
-        /// <returns>The compiled setter function.</returns>
-        private static Action<T, object> MakeSetter(PropertyInfo property)
-        {
-            ParameterExpression entityParameter = Expression.Parameter(typeof(T));
-            ParameterExpression objectParameter = Expression.Parameter(typeof(Object));
-            MemberExpression toProperty = Expression.Property(Expression.TypeAs(entityParameter, property.DeclaringType), property);
-            UnaryExpression fromValue = Expression.Convert(objectParameter, property.PropertyType);
-            BinaryExpression assignment = Expression.Assign(toProperty, fromValue);
-            Expression<Action<T, object>> lambda = Expression.Lambda<Action<T, object>>(assignment, entityParameter, objectParameter);
-            return lambda.Compile();
-        }
-
-        /// <summary>
-        /// Creates a getter function for the specified property.
-        /// </summary>
-        /// <param name="property">The property for which to create the getter.</param>
-        /// <returns>The compiled getter function.</returns>
-        private static Func<T, object> MakeGetter(PropertyInfo property)
-        {
-            ParameterExpression entityParameter = Expression.Parameter(typeof(T));
-            MemberExpression fromProperty = Expression.Property(Expression.TypeAs(entityParameter, property.DeclaringType), property);
-            UnaryExpression convert = Expression.Convert(fromProperty, typeof(Object));
-            Expression<Func<T, object>> lambda = Expression.Lambda<Func<T, object>>(convert, entityParameter);
-            return lambda.Compile();
-        }
-
-        /// <summary>
-        /// Copies the value of the property from one entity to another.
-        /// </summary>
-        /// <param name="from">The entity from which to copy the property value.</param>
-        /// <param name="to">The entity to which to copy the property value.</param>
+        /// <param name="from">The source entity.</param>
+        /// <param name="to">The destination entity.</param>
+        /// <exception cref="ArgumentNullException">Thrown when either from or to is null.</exception>
         public void Copy(T from, T to)
         {
-            if (from == null)
-            {
-                throw new ArgumentNullException("from");
-            }
-            if (to == null)
-            {
-                throw new ArgumentNullException("to");
-            }
+            ArgumentNullException.ThrowIfNull(from);
+            ArgumentNullException.ThrowIfNull(to);
+
             Set(to, Get(from));
         }
+
+        /// <summary>
+        /// Creates a compiled setter for the specified property.
+        /// </summary>
+        /// <param name="property">The property to create a setter for.</param>
+        /// <returns>A compiled setter function.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property cannot be set.</exception>
+        private static Action<T, object> CreateSetter(PropertyInfo property)
+        {
+            // Check if the property can be written
+            if (!property.CanWrite)
+                return (_, __) => throw new InvalidOperationException(
+                    $"Property {property.Name} does not have a setter");
+
+            var entityParam = Expression.Parameter(typeof(T), "entity");
+            var valueParam = Expression.Parameter(typeof(object), "value");
+
+            var convertedValue = Expression.Convert(valueParam, property.PropertyType);
+            var propertyAccess = Expression.Property(
+                Expression.TypeAs(entityParam, property.DeclaringType),
+                property
+            );
+
+            var assign = Expression.Assign(propertyAccess, convertedValue);
+            return Expression.Lambda<Action<T, object>>(
+                assign,
+                entityParam,
+                valueParam
+            ).Compile();
+        }
+
+        /// <summary>
+        /// Creates a compiled getter for the specified property.
+        /// </summary>
+        /// <param name="property">The property to create a getter for.</param>
+        /// <returns>A compiled getter function.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the property cannot be read.</exception>
+        private static Func<T, object> CreateGetter(PropertyInfo property)
+        {
+            // Check if the property can be read
+            if (!property.CanRead)
+                return _ => throw new InvalidOperationException(
+                    $"Property {property.Name} does not have a getter");
+
+            var entityParam = Expression.Parameter(typeof(T), "entity");
+
+            var propertyAccess = Expression.Property(
+                Expression.TypeAs(entityParam, property.DeclaringType),
+                property
+            );
+
+            var convertToObject = Expression.Convert(propertyAccess, typeof(object));
+
+            return Expression.Lambda<Func<T, object>>(
+                convertToObject,
+                entityParam
+            ).Compile();
+        }
+
+        /// <summary>
+        /// Gets the default value for the property type.
+        /// </summary>
+        /// <returns>The default value for value types, null for reference types.</returns>
+        public object? GetDefaultValue() =>
+            Type.IsValueType ? default(T) : null;
     }
 }

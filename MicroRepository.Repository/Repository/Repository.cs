@@ -13,181 +13,209 @@ namespace MicroRepository.Repository
 {
     public partial class Repository<TEntity> : IRepository<TEntity> where TEntity : class
     {
-
         private readonly TableDefinition _tableDefinition;
-
         private readonly DataBasePropertyAccessor[] _keyColumns;
 
-        private readonly object _syncObj = new object();
         public Repository(IDbConnection connection)
         {
-            this.Connection = connection;
-            Type targetType = typeof(TEntity);
+            ArgumentNullException.ThrowIfNull(connection, nameof(connection));
 
-            _tableDefinition = TableDefinitionCache.GetTableDefinition(targetType);
-
-            this._keyColumns = _tableDefinition.Members.Values.Where(c => c.IsPrimaryKey).ToArray();
+            Connection = connection;
+            _tableDefinition = TableDefinitionCache.GetTableDefinition(typeof(TEntity));
+            _keyColumns = _tableDefinition.Members.Values
+                .Where(member => member.IsPrimaryKey)
+                .ToArray();
         }
 
+        #region IRepository
 
-        #region IRepository 
+        public IDbConnection Connection { get; }
 
-        public IDbConnection Connection { get; private set; }
-
-        public EnumerableRepository<TEntity> Elements
-        {
-            get { return new Sql.EnumerableRepository<TEntity>(Connection); }
-        }
-
+        public EnumerableRepository<TEntity> Elements => new EnumerableRepository<TEntity>(Connection);
 
         public virtual TEntity Add(TEntity item)
         {
-            SqlBuilder builder = new SqlBuilder(_tableDefinition.InsertTemplate);
+            ArgumentNullException.ThrowIfNull(item);
+
+            var builder = new SqlBuilder(_tableDefinition.InsertTemplate);
             builder.AddParameter(item);
-            lock (_syncObj)
+
+            if (_tableDefinition.HasIdentity)
             {
-                // if has identity primari key
-                if (_tableDefinition.HasIdentity)
+                var id = Connection.ExecuteScalar<int>(builder.RawSql, builder.Parameters);
+                if (id <= 0)
                 {
-                    int res = Connection.ExecuteScalar<int>(builder.RawSql, builder.Parameters);
-                    if (res > 0)
-                        return Find(res);
+                    throw new InvalidOperationException("Insert failed: no identity key returned.");
                 }
-                else
+
+                return Find(id);
+            }
+            else
+            {
+                var rowsInserted = Connection.Execute(builder.RawSql, builder.Parameters);
+                if (rowsInserted > 0)
                 {
-                    int lc = Connection.Execute(builder.RawSql, builder.Parameters);
-                    if (lc > 0)
+                    if (_keyColumns.Any())
                     {
-                        if (_keyColumns.Length > 0)
-                        {
-                            builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                            BindKeyColumn(item, builder);
-                            builder.Take(1);
-                            return Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
-                        }
-                        else return item;
+                        return FindEntityByPrimaryKey(item);
                     }
+
+                    return item;
                 }
 
-
-                throw new Exception("Insert failed");
+                throw new InvalidOperationException("Insert failed: no rows were affected.");
             }
         }
 
         public virtual bool Remove(TEntity item)
         {
-            SqlBuilder builder = new SqlBuilder(_tableDefinition.DeleteTemplate);
+            ArgumentNullException.ThrowIfNull(item);
+
+            var builder = new SqlBuilder(_tableDefinition.DeleteTemplate);
             BindKeyColumn(item, builder);
-            lock (_syncObj)
-                return Connection.Execute(builder.RawSql, builder.Parameters) != 0;
+
+            return Connection.Execute(builder.RawSql, builder.Parameters) > 0;
         }
 
         public virtual TEntity Update(TEntity item)
         {
-            SqlBuilder builder = null;
-            lock (_syncObj)
+            ArgumentNullException.ThrowIfNull(item);
+
+            SqlBuilder builder;
+            if (RepositoryDiscoveryService.UpdateChangeOnly)
             {
-                if (RepositoryDiscoveryService.UpdateChangeOnly)
-                {
-                    //delta 
-                    builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                    BindKeyColumn(item, builder);
-                    builder.Take(1);
-                    TEntity original = Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
-                    Delta<TEntity> delta = new Delta<TEntity>(item);
-                    delta.Compare(original, false);
-                    DataBasePropertyAccessor[] changedProps = delta.GetChangedProperties();
-                    if (changedProps.Length == 0)
-                        return item;
-
-                    builder = new SqlBuilder();
-                    string[] columns = changedProps.Where(c => !c.IsIdentity).Select(c => c.UpdateString).ToArray();
-
-                    builder.Template = string.Format(RepositoryDiscoveryService.Template.Update, RepositoryDiscoveryService.Template.Enquote(_tableDefinition.TableName), string.Join(", ", columns));
-                    foreach (DataBasePropertyAccessor prop in changedProps)
-                        builder.AddParameter(prop.Name, prop.Get(item));
-
-                    BindKeyColumn(original, builder);
-                }
-                else
-                {
-
-                    builder = new SqlBuilder(_tableDefinition.UpdateTemplate);
-                    builder.AddParameter(item);
-                    BindKeyColumn(item, builder);
-                }
-
-                if (Connection.Execute(builder.RawSql, builder.Parameters) != 0)
-                {
-                    builder = new SqlBuilder(_tableDefinition.SelectTemplate);
-                    BindKeyColumn(item, builder);
-                    builder.Take(1);
-                    return Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
-                }
-                return default;
+                builder = CreateDeltaBasedUpdate(item);
             }
-        }
+            else
+            {
+                builder = new SqlBuilder(_tableDefinition.UpdateTemplate);
+                builder.AddParameter(item);
+                BindKeyColumn(item, builder);
+            }
 
+            var rowsUpdated = Connection.Execute(builder.RawSql, builder.Parameters);
+            if (rowsUpdated > 0)
+            {
+                return FindEntityByPrimaryKey(item);
+            }
+
+            throw new InvalidOperationException("Update failed: no rows were affected.");
+        }
 
         public virtual TEntity Find(params object[] orderedKeyValues)
         {
             if (_keyColumns.Length == 0)
-                throw new Exception($"Table {_tableDefinition.TableName} does not have primary keys");
-            SqlBuilder builder = new SqlBuilder();
-            int i = 0;
-            foreach (object key in orderedKeyValues)
             {
-                if (key != null)
-                {
-                    builder.Where(_keyColumns[i].UpdateString);
-                    builder.AddParameter(_keyColumns[i].Name, key);
-                }
-                else
-                    builder.Where($"{_keyColumns[i].EnquotedDbName} IS NULL");
-                i++;
-
+                throw new InvalidOperationException($"Table {_tableDefinition.TableName} does not have primary keys.");
             }
+
+            var builder = new SqlBuilder(_tableDefinition.SelectTemplate);
+            BuildPrimaryKeyCondition(builder, orderedKeyValues);
             builder.Take(1);
-            builder.Template = _tableDefinition.SelectTemplate;
-            lock (_syncObj)
-                return Connection.QueryFirstOrDefault<TEntity>(builder.RawSql, builder.Parameters);
+
+            return Connection.QueryFirstOrDefault<TEntity>(builder.RawSql, builder.Parameters);
         }
 
-        public IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null)
+        public IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object? parameter = null)
         {
-            lock (_syncObj)
-                return Connection.Query<TEntity>(sqlQuery, new DynamicParameter(parameter));
-        }
+            ArgumentNullException.ThrowIfNull(sqlQuery);
 
+            return Connection.Query<TEntity>(sqlQuery, new DynamicParameter(parameter));
+        }
 
         #endregion
 
+        #region Helpers
 
-        #region helpers        
-
-        void BindKeyColumn(TEntity item, SqlBuilder builder)
+        private TEntity FindEntityByPrimaryKey(TEntity entity)
         {
-            object value;
-            foreach (DataBasePropertyAccessor key in _keyColumns)
+            ArgumentNullException.ThrowIfNull(entity);
+
+            var builder = new SqlBuilder(_tableDefinition.SelectTemplate);
+            BindKeyColumn(entity, builder);
+            builder.Take(1);
+
+            return Connection.QueryFirstOrDefault<TEntity>(builder.RawSql, builder.Parameters)
+                   ?? throw new InvalidOperationException("Entity not found after insert/update.");
+        }
+
+        private void BindKeyColumn(TEntity entity, SqlBuilder builder)
+        {
+            foreach (var key in _keyColumns)
             {
-                value = key.Get(item);
+                var value = key.Get(entity);
                 if (value != null)
                 {
                     builder.Where(key.UpdateString);
                     builder.AddParameter(key.Name, value);
                 }
                 else
+                {
                     builder.Where($"{key.EnquotedDbName} IS NULL");
-
+                }
             }
         }
 
+        private void BuildPrimaryKeyCondition(SqlBuilder builder, params object[] orderedKeyValues)
+        {
+            if (orderedKeyValues.Length != _keyColumns.Length)
+            {
+                throw new ArgumentException("The number of provided key values does not match the number of primary keys.");
+            }
+
+            for (var i = 0; i < _keyColumns.Length; i++)
+            {
+                var key = _keyColumns[i];
+                var value = orderedKeyValues[i];
+
+                if (value != null)
+                {
+                    builder.Where(key.UpdateString);
+                    builder.AddParameter(key.Name, value);
+                }
+                else
+                {
+                    builder.Where($"{key.EnquotedDbName} IS NULL");
+                }
+            }
+        }
+
+        private SqlBuilder CreateDeltaBasedUpdate(TEntity item)
+        {
+            var builder = new SqlBuilder(_tableDefinition.SelectTemplate);
+            BindKeyColumn(item, builder);
+            builder.Take(1);
+
+            var original = Connection.QueryFirst<TEntity>(builder.RawSql, builder.Parameters);
+            var delta = new Delta<TEntity>(item);
+            delta.Compare(original, false);
+
+            var changedProperties = delta.GetChangedProperties();
+            if (!changedProperties.Any())
+            {
+                return null!;
+            }
+
+            var columns = string.Join(", ", changedProperties
+                .Where(c => !c.IsIdentity)
+                .Select(c => c.UpdateString));
+
+            builder = new SqlBuilder();
+            builder.Template = string.Format(
+                RepositoryDiscoveryService.Template.Update,
+                RepositoryDiscoveryService.Template.Enquote(_tableDefinition.TableName),
+                columns);
+
+            foreach (var prop in changedProperties)
+            {
+                builder.AddParameter(prop.Name, prop.Get(item));
+            }
+
+            BindKeyColumn(original, builder);
+
+            return builder;
+        }
+
         #endregion
-
-        #region IEnumerable
-
-        #endregion
-
     }
 }
-

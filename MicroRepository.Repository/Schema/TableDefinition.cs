@@ -1,5 +1,7 @@
-﻿using MicroRepository.Repository;
+﻿using MicroRepository.Core.Caching;
 using MicroRepository.Repository.Attributes;
+using MicroRepository.Repository;
+using MicroRepository.Templates;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -8,91 +10,129 @@ using System.Reflection;
 
 namespace MicroRepository.Schema
 {
+    /// <summary>
+    /// Defines table metadata for an entity type.
+    /// </summary>
     public class TableDefinition
-    {        
+    {
         public string TableName { get; private set; }
         public string SelectTableName { get; private set; }
-
         public bool HasIdentity { get; private set; }
-                
         public Dictionary<string, DataBasePropertyAccessor> Members { get; private set; }
-
         public string SelectTemplate { get; private set; }
         public string CountTemplate { get; private set; }
         public string DeleteTemplate { get; private set; }
         public string InsertTemplate { get; private set; }
         public string UpdateTemplate { get; private set; }
 
-
-        public TableDefinition(Type targetType, string name = null)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TableDefinition"/> class.
+        /// </summary>
+        /// <param name="targetType">The type representing the entity.</param>
+        /// <param name="name">Optional custom table name.</param>
+        public TableDefinition(Type targetType, string? name = null)
         {
-            TypeInfo targetTypeInfo = targetType.GetTypeInfo();
-            string viewName = string.Empty;
-            var template = RepositoryDiscoveryService.Template;
+            ArgumentNullException.ThrowIfNull(targetType, nameof(targetType));
 
+            var template = RepositoryDiscoveryService.Template;
+            if (template == null)
+            {
+                throw new InvalidOperationException("Repository template is not initialized.");
+            }
+
+            InitializeTableName(targetType, name, template);
+            InitializeMembers(targetType, template);
+            InitializeTemplates(template);
+        }
+
+        /// <summary>
+        /// Initializes the table name and view-related metadata.
+        /// </summary>
+        private void InitializeTableName(Type targetType, string? name, SqlTemplate template)
+        {
+            var targetTypeInfo = targetType.GetTypeInfo();
+            var viewName = string.Empty;
+
+            // Handle custom table name first
             if (!string.IsNullOrEmpty(name))
+            {
                 TableName = name;
+            }
             else
             {
-                System.Attribute attr = targetTypeInfo.GetCustomAttribute<TableAttribute>();
-                if (attr != null)
-                    TableName = ((TableAttribute)attr).Name;
-                else
-                    TableName = targetType.Name;
+                // Check for [Table] attribute
+                var tableAttribute = targetTypeInfo.GetCustomAttribute<TableAttribute>();
+                TableName = tableAttribute?.Name ?? targetType.Name;
 
-                attr = targetTypeInfo.GetCustomAttribute<ViewAttribute>();
-                if (attr != null)
+                // Check for [View] attribute
+                var viewAttribute = targetTypeInfo.GetCustomAttribute<ViewAttribute>();
+                if (viewAttribute != null)
                 {
-                    viewName = ((ViewAttribute)attr).Name;
+                    viewName = viewAttribute.Name;
                     SelectTableName = $"{template.Enquote(viewName)} AS {template.Enquote(TableName)}";
                 }
                 else
+                {
                     SelectTableName = template.Enquote(TableName);
-                
+                }
             }
-
-            var cachedProperties = MicroRepository.Core.Caching.ReflectionCache.GetProperties(targetType);
-
-            Members = cachedProperties.Values.
-                Where(c => !c.Property.IsDefined(typeof(NotMappedAttribute)))
-                .Select(p => new DataBasePropertyAccessor(p, TableName))
-                .ToDictionary(p => p.Name);
-
-
-            
-
-            // identity
-            HasIdentity = Members.Values.Any(c => c.IsIdentity);
-
-            
-            // select 
-            if (!string.IsNullOrEmpty(viewName))
-                SelectTemplate = string.Format(template.Select, template.Enquote(TableName) + ".*", SelectTableName);
-            else
-                SelectTemplate = string.Format(template.Select, string.Join(", ", Members.Values.Select(c => c.SelectString)), SelectTableName);
-
-            //count 
-                CountTemplate = string.Format(template.Select, "COUNT(*)", SelectTableName);
-
-            // delete 
-            DeleteTemplate = string.Format(template.Delete, template.Enquote(TableName));
-
-            // update            
-            UpdateTemplate = string.Format(template.Update, template.Enquote(TableName), string.Join(",", Members.Values.Where(c => !c.IsPrimaryKey).Select(c => c.UpdateString)));
-
-            // insert
-            string tpl = template.Insert;
-            if (Members.Any(c => c.Value.IsIdentity))
-                tpl += template.Identity;
-
-            IEnumerable<string> dbCols = Members.Values.Where(c => !c.IsIdentity).Select(c => c.EnquotedDbName);
-            IEnumerable<string> objectCols = Members.Values.Where(c => !c.IsIdentity).Select(c => string.Format("@{0}", c.Name));
-
-            InsertTemplate = string.Format(tpl, template.Enquote(TableName), string.Join(", ", dbCols), string.Join(", ", objectCols));
-
-
         }
 
+        /// <summary>
+        /// Initializes the properties (members) of the entity, including metadata for mapping.
+        /// </summary>
+        private void InitializeMembers(Type targetType, SqlTemplate template)
+        {
+            var cachedProperties = ReflectionCache.GetProperties(targetType);
 
+            Members = cachedProperties.Values
+                .Where(prop => !prop.Property.IsDefined(typeof(NotMappedAttribute)))
+                .Select(prop => new DataBasePropertyAccessor(prop, TableName))
+                .ToDictionary(accessor => accessor.Name);
+
+            HasIdentity = Members.Values.Any(member => member.IsIdentity);
+        }
+
+        /// <summary>
+        /// Initializes SQL templates for various CRUD operations.
+        /// </summary>
+        private void InitializeTemplates(SqlTemplate template)
+        {
+            // SELECT template
+            SelectTemplate = Members.Values.Any(member => member.IsIdentity)
+                ? string.Format(template.Select, template.Enquote(TableName) + ".*", SelectTableName)
+                : string.Format(template.Select, string.Join(", ", Members.Values.Select(member => member.SelectString)), SelectTableName);
+
+            // COUNT template
+            CountTemplate = string.Format(template.Select, "COUNT(*)", SelectTableName);
+
+            // DELETE template
+            DeleteTemplate = string.Format(template.Delete, template.Enquote(TableName));
+
+            // UPDATE template
+            UpdateTemplate = string.Format(template.Update,
+                template.Enquote(TableName),
+                string.Join(", ", Members.Values.Where(member => !member.IsPrimaryKey).Select(member => member.UpdateString)));
+
+            // INSERT template
+            var insertTemplate = template.Insert;
+            if (HasIdentity)
+            {
+                insertTemplate += template.Identity; // Append identity retrieval (e.g., SCOPE_IDENTITY)
+            }
+
+            var dbColumns = Members.Values
+                .Where(member => !member.IsIdentity)
+                .Select(member => member.EnquotedDbName);
+
+            var objectColumns = Members.Values
+                .Where(member => !member.IsIdentity)
+                .Select(member => $"@{member.Name}");
+
+            InsertTemplate = string.Format(insertTemplate,
+                template.Enquote(TableName),
+                string.Join(", ", dbColumns),
+                string.Join(", ", objectColumns));
+        }
     }
 }
