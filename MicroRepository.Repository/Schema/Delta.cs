@@ -10,7 +10,7 @@ namespace MicroRepository.Schema
     /// </summary>
     public class Delta<T> where T : class
     {
-        private readonly Dictionary<string, DataBasePropertyAccessor> _properties;
+        private readonly Dictionary<string, ColumnDescriptor> _properties;
         private readonly HashSet<string> _ignoredProperties;
         private readonly HashSet<string> _changedProperties;
         private readonly T _entity;
@@ -126,7 +126,7 @@ namespace MicroRepository.Schema
         /// <summary>
         /// Gets the accessors of the properties that have been changed.
         /// </summary>
-        public IEnumerable<DataBasePropertyAccessor> GetChangedPropertiesAccessors()
+        public IEnumerable<ColumnDescriptor> GetChangedPropertiesAccessors()
         {
             return _changedProperties.Select(key => _properties[key]);
         }
@@ -142,7 +142,7 @@ namespace MicroRepository.Schema
         /// <summary>
         /// Gets the accessors of the properties that have not been changed.
         /// </summary>
-        public IEnumerable<DataBasePropertyAccessor> GetUnchangedPropertiesAccessors()
+        public IEnumerable<ColumnDescriptor> GetUnchangedPropertiesAccessors()
         {
             return _properties.Keys
                 .Except(_changedProperties)

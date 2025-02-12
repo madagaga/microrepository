@@ -1,6 +1,7 @@
 ﻿using MicroRepository.Core.Caching;
 using MicroRepository.Core.DynamicParameters;
 using MicroRepository.Core.Schema;
+using MicroRepository.Core.TypeConversion;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -71,7 +72,14 @@ namespace MicroRepository.Core.Sql
         }
 
         // Executes a scalar query and returns a single value casted to T
-        public static T ExecuteScalar<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
+        public static T? ExecuteScalar<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
+        {
+            object? result = connection.ExecuteScalar(sql, parameters);
+            return result is null ? default! : (T)TypeConverterCache.Convert(result, typeof(T));
+        }
+
+
+        internal static object? ExecuteScalar(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
         {
             ArgumentNullException.ThrowIfNull(connection);
             ArgumentNullException.ThrowIfNull(sql);
@@ -83,8 +91,7 @@ namespace MicroRepository.Core.Sql
                 BindParameters(command, parameters);
                 command.CommandText = sql;
 
-                var result = command.ExecuteScalar();
-                return result is null ? default! : (T)Convert.ChangeType(result, typeof(T));
+                return command.ExecuteScalar();                
             }
             finally
             {
@@ -98,7 +105,7 @@ namespace MicroRepository.Core.Sql
             ArgumentNullException.ThrowIfNull(command);
 
             var targetType = typeof(T);
-            command.Connection.OpenIfNeeded();
+            command.Connection?.OpenIfNeeded();
 
             using var reader = command.ExecuteReader(behavior);
             if (!targetType.IsPrimitiveType())
@@ -109,13 +116,13 @@ namespace MicroRepository.Core.Sql
                 while (reader.Read())
                 {
                     reader.GetValues(rowData);
-                    var instance = (T)ReflectionCache.CreateInstance(targetType);
+                    T instance = (T)ReflectionCache.CreateInstance(targetType);
 
                     foreach (var kvp in cachedMapping)
                     {
                         var valueToSet = rowData[kvp.Key] is DBNull
                             ? null
-                            : Convert.ChangeType(rowData[kvp.Key], kvp.Value.Type);
+                            : TypeConverterCache.Convert(rowData[kvp.Key], kvp.Value.Type); 
                         kvp.Value.Set(instance, valueToSet);
                     }
 
@@ -124,9 +131,14 @@ namespace MicroRepository.Core.Sql
             }
             else
             {
+                var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
                 while (reader.Read())
                 {
-                    yield return (T)Convert.ChangeType(reader[0], Nullable.GetUnderlyingType(targetType) ?? targetType);
+                    var value = reader[0];
+                    if (value is DBNull)
+                        yield return default;
+                    else
+                        yield return (T)TypeConverterCache.Convert(value, underlyingType);
                 }
             }
         }
@@ -181,10 +193,10 @@ namespace MicroRepository.Core.Sql
         // Closes connection if not already closed
         private static void CloseIfNeeded(this IDbConnection connection)
         {
-            if (connection.State != ConnectionState.Closed)
-            {
-                connection.Close();
-            }
+            //if (connection.State != ConnectionState.Closed)
+            //{
+            //    connection.Close();
+            //}
         }
     }
 }

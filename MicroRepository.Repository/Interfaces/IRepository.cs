@@ -1,4 +1,5 @@
-﻿using MicroRepository.Sql;
+﻿using MicroRepository.Repository.EnumerableEntity;
+using MicroRepository.Sql;
 using System.Collections.Generic;
 using System.Data;
 
@@ -9,13 +10,9 @@ namespace MicroRepository.Repository.Interfaces
         IDbConnection Connection { get; }
     }
 
-    public interface IRepository<TEntity> : IRepository
+    public interface IRepository<TEntity> : IRepository,  IEnumerableRepository<TEntity>
     {
-        /// <summary>
-        /// Elements - data queryable 
-        /// </summary>
-        EnumerableRepository<TEntity> Elements { get; }
-
+        
         /// <summary>
         /// Add an element to database
         /// </summary>
@@ -31,7 +28,7 @@ namespace MicroRepository.Repository.Interfaces
         bool Remove(TEntity item);
 
         /// <summary>
-        /// Updates element in database <seealso cref="RepositoryDiscoveryService.UpdateChangeOnly"/>
+        /// Updates element in database <seealso cref="DbSettings.UpdateChangeOnly"/>
         /// </summary>
         /// <param name="item">item to upload </param>
         /// <returns>element updated from database</returns>
@@ -43,7 +40,7 @@ namespace MicroRepository.Repository.Interfaces
         /// </summary>
         /// <param name="orderedKeyValues">primary key s</param>
         /// <returns>Found element </returns>
-        TEntity Find(params object[] orderedKeyValues);
+        TEntity? Find(params object[] orderedKeyValues);
 
         /// <summary>
         /// Execute a raw query 
@@ -51,7 +48,7 @@ namespace MicroRepository.Repository.Interfaces
         /// <param name="sqlQuery">sql query</param>
         /// <param name="parameter">object parameter</param>
         /// <returns>Found element</returns>
-        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object parameter = null);
+        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object? parameter);
     }
 }
 

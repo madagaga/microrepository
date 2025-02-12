@@ -1,9 +1,12 @@
 ﻿using MicroRepository.Caching;
 using MicroRepository.Core.Sql;
+using MicroRepository.Repository;
+using MicroRepository.Repository.EnumerableEntity;
+using MicroRepository.Repository.Paging;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 
 namespace MicroRepository.Sql
 {
@@ -11,7 +14,7 @@ namespace MicroRepository.Sql
     /// Provides an enumerable repository for a database entity. Supports lazy-loading of query results.
     /// </summary>
     /// <typeparam name="TEntity">The type of the entity.</typeparam>
-    public partial class EnumerableRepository<TEntity> : IEnumerable<TEntity>
+    public class EnumerableRepository<TEntity> : IEnumerableRepository<TEntity>
     {
         private readonly string _selectTemplate;
         private SqlBuilder? _internalBuilder;
@@ -40,30 +43,32 @@ namespace MicroRepository.Sql
         /// <summary>
         /// Gets the internal SQL builder used to dynamically construct queries.
         /// </summary>
-        internal SqlBuilder InternalBuilder =>
+        public SqlBuilder InternalBuilder =>
             _internalBuilder ??= new SqlBuilder(_selectTemplate);
 
-        /// <summary>
-        /// Retrieves an enumerator for iterating over the query results.
-        /// </summary>
-        /// <returns>An enumerator over the query results.</returns>
-        public IEnumerator<TEntity> GetEnumerator()
-        {
-            if (_result is null)
-            {
-                _result = ExecuteQuery();
-            }
+        public bool Enumerated => _result != null;
 
-            return _result.GetEnumerator();
+        
+        public List<TEntity> ToList()
+        {
+            return AsIEnumerable().ToList();
         }
 
-        /// <summary>
-        /// Retrieves the enumerator for non-generic iterations.
-        /// </summary>
-        /// <returns>The non-generic enumerator.</returns>
-        IEnumerator IEnumerable.GetEnumerator()
+        public IPagedList<TEntity> ToPagedList(int page, int resultPerPage)
         {
-            return GetEnumerator();
+            string countSql = $"SELECT COUNT(*) FROM ({InternalBuilder.RawSql}) AS subquery";
+            
+            string pagedSql = string.Concat(InternalBuilder.RawSql, " ", string.Format(DbSettings.Template.Take, " @ResultPerPage "), string.Format(DbSettings.Template.Skip, " @Offset"));
+
+           
+            
+            InternalBuilder.Parameters.Add("Offset", (page - 1) * resultPerPage);
+            InternalBuilder.Parameters.Add("ResultPerPage", resultPerPage);
+
+            int totalResults = Connection.ExecuteScalar<int>(countSql, InternalBuilder.Parameters);
+            IEnumerable<TEntity> items = Connection.Query<TEntity>(pagedSql, InternalBuilder.Parameters);
+
+            return new PagedList<TEntity>(items, page, totalResults, resultPerPage);
         }
 
         /// <summary>
@@ -71,19 +76,30 @@ namespace MicroRepository.Sql
         /// </summary>
         /// <returns>An enumerable collection of entities from the query.</returns>
         /// <exception cref="InvalidOperationException">Thrown if the query fails.</exception>
-        private IEnumerable<TEntity> ExecuteQuery()
+        public IEnumerable<TEntity> AsIEnumerable()
         {
-            try
+            if (_result is null)
             {
-                return Connection.Query<TEntity>(
-                    InternalBuilder.RawSql,
-                    InternalBuilder.Parameters
-                );
+                try
+                {
+                    return Connection.Query<TEntity>(
+                        InternalBuilder.RawSql,
+                        InternalBuilder.Parameters
+                    );
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Failed to execute the query for EnumerableRepository.", ex);
+                }
+                finally
+                {
+
+                    _internalBuilder = null;
+                }
             }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("Failed to execute the query for EnumerableRepository.", ex);
-            }
+
+            return _result;
         }
+            
     }
 }

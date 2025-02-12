@@ -7,19 +7,19 @@ namespace MicroRepository.Caching
 {
     public static class TableDefinitionCache
     {
-        internal static ConcurrentDictionary<Type, TableDefinition> _tableDefinitions = new ConcurrentDictionary<Type, TableDefinition>();
+        internal static ConcurrentDictionary<Type, TableDescriptor> _tableDefinitions = new ConcurrentDictionary<Type, TableDescriptor>();
 
-        internal static TableDefinition GetTableDefinition(Type targetType)
+        internal static TableDescriptor GetTableDefinition(Type targetType)
         {
             if (!_tableDefinitions.ContainsKey(targetType))
             {
-                TableDefinition definition = new TableDefinition(targetType);
+                TableDescriptor definition = new TableDescriptor(targetType);
                 _tableDefinitions.TryAdd(targetType, definition);
             }
             return _tableDefinitions[targetType];
         }
 
-        internal static Dictionary<string, DataBasePropertyAccessor> GetPropertiesDictionary(Type t)
+        internal static Dictionary<string, ColumnDescriptor> GetPropertiesDictionary(Type t)
         {
 
             return GetTableDefinition(t).Members;

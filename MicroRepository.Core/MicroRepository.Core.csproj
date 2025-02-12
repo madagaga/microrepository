@@ -8,6 +8,9 @@
 	<OptimizationPreference>Speed</OptimizationPreference>
 	<IlcOptimizationPreference>Size</IlcOptimizationPreference>
 	<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+	  <IsAotCompatible>true</IsAotCompatible>
+	  <Nullable>enable</Nullable>
+
   </PropertyGroup>
 
 </Project>

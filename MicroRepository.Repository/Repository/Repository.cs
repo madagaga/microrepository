@@ -11,16 +11,15 @@ using System.Linq;
 
 namespace MicroRepository.Repository
 {
-    public partial class Repository<TEntity> : IRepository<TEntity> where TEntity : class
+    public class Repository<TEntity> : EnumerableRepository<TEntity>, IRepository<TEntity> where TEntity : class
     {
-        private readonly TableDefinition _tableDefinition;
-        private readonly DataBasePropertyAccessor[] _keyColumns;
+        private readonly TableDescriptor _tableDefinition;
+        private readonly ColumnDescriptor[] _keyColumns;
 
-        public Repository(IDbConnection connection)
+        public Repository(IDbConnection connection): base(connection)
         {
             ArgumentNullException.ThrowIfNull(connection, nameof(connection));
-
-            Connection = connection;
+                            
             _tableDefinition = TableDefinitionCache.GetTableDefinition(typeof(TEntity));
             _keyColumns = _tableDefinition.Members.Values
                 .Where(member => member.IsPrimaryKey)
@@ -28,11 +27,7 @@ namespace MicroRepository.Repository
         }
 
         #region IRepository
-
-        public IDbConnection Connection { get; }
-
-        public EnumerableRepository<TEntity> Elements => new EnumerableRepository<TEntity>(Connection);
-
+        
         public virtual TEntity Add(TEntity item)
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -40,15 +35,21 @@ namespace MicroRepository.Repository
             var builder = new SqlBuilder(_tableDefinition.InsertTemplate);
             builder.AddParameter(item);
 
-            if (_tableDefinition.HasIdentity)
+            if (_tableDefinition.HasAutoId)
             {
-                var id = Connection.ExecuteScalar<int>(builder.RawSql, builder.Parameters);
-                if (id <= 0)
-                {
-                    throw new InvalidOperationException("Insert failed: no identity key returned.");
-                }
+                // retrieve primarykey
+                ColumnDescriptor cd = _keyColumns.Single(c=>c.IsAutoId);
 
-                return Find(id);
+                object? raw = Connection.ExecuteScalar(builder.RawSql, builder.Parameters);
+                if(raw == null)
+                    throw new InvalidOperationException("Insert failed: no identity key returned.");
+
+
+                //object id = Convert.ChangeType(raw, cd.Type);                
+                TEntity? result = Find(raw);
+                if (result == null)
+                    throw new NullReferenceException();
+                return result;
             }
             else
             {
@@ -82,7 +83,7 @@ namespace MicroRepository.Repository
             ArgumentNullException.ThrowIfNull(item);
 
             SqlBuilder builder;
-            if (RepositoryDiscoveryService.UpdateChangeOnly)
+            if (DbSettings.UpdateChangeOnly)
             {
                 builder = CreateDeltaBasedUpdate(item);
             }
@@ -102,11 +103,11 @@ namespace MicroRepository.Repository
             throw new InvalidOperationException("Update failed: no rows were affected.");
         }
 
-        public virtual TEntity Find(params object[] orderedKeyValues)
+        public virtual TEntity? Find(params object[] orderedKeyValues)
         {
             if (_keyColumns.Length == 0)
             {
-                throw new InvalidOperationException($"Table {_tableDefinition.TableName} does not have primary keys.");
+                throw new InvalidOperationException($"Table {_tableDefinition.Name} does not have primary keys.");
             }
 
             var builder = new SqlBuilder(_tableDefinition.SelectTemplate);
@@ -151,7 +152,7 @@ namespace MicroRepository.Repository
                 }
                 else
                 {
-                    builder.Where($"{key.EnquotedDbName} IS NULL");
+                    builder.Where($"{key.DbName} IS NULL");
                 }
             }
         }
@@ -175,7 +176,7 @@ namespace MicroRepository.Repository
                 }
                 else
                 {
-                    builder.Where($"{key.EnquotedDbName} IS NULL");
+                    builder.Where($"{key.DbName} IS NULL");
                 }
             }
         }
@@ -190,20 +191,20 @@ namespace MicroRepository.Repository
             var delta = new Delta<TEntity>(item);
             delta.Compare(original, false);
 
-            var changedProperties = delta.GetChangedProperties();
+            var changedProperties = delta.GetChangedPropertiesAccessors();
             if (!changedProperties.Any())
             {
                 return null!;
             }
 
             var columns = string.Join(", ", changedProperties
-                .Where(c => !c.IsIdentity)
+                .Where(c => !c.IsAutoId)
                 .Select(c => c.UpdateString));
 
             builder = new SqlBuilder();
             builder.Template = string.Format(
-                RepositoryDiscoveryService.Template.Update,
-                RepositoryDiscoveryService.Template.Enquote(_tableDefinition.TableName),
+                DbSettings.Template.Update,
+                _tableDefinition.DBName,
                 columns);
 
             foreach (var prop in changedProperties)
