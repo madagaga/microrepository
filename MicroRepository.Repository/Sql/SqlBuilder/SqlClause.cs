@@ -5,7 +5,7 @@ namespace MicroRepository.Sql
 {
     public class SqlClauseCollection : List<SqlClause>
     {
-        public string KeyWord { get; set; }
+        public string KeyWord { get; set; } = string.Empty;
 
         ///<summary>
         /// Returns a string representation of the SqlClauseCollection.
@@ -28,8 +28,8 @@ namespace MicroRepository.Sql
 
     public class SqlClause
     {
-        public string Sql { get; set; }
-        public string Joiner { get; set; }
+        public string Sql { get; set; } = string.Empty;
+        public string Joiner { get; set; } = string.Empty ;
     }
 
 }

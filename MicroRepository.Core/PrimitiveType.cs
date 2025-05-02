@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace MicroRepository.Core
@@ -12,7 +12,8 @@ namespace MicroRepository.Core
     /// </summary>
     static class PrimitiveTypes
     {
-        public static readonly Type[] List;
+        private static readonly Type[] _primitiveTypes;
+        private static readonly ConcurrentDictionary<Type, bool> _cache = new();
 
         static PrimitiveTypes()
         {
@@ -41,11 +42,28 @@ namespace MicroRepository.Core
                     typeof(TimeSpan),
                 };
 
-            var nullTypes = from t in types
-                            where t.GetTypeInfo().IsValueType
-                            select typeof(Nullable<>).MakeGenericType(t);
+            var nullableTypes = new[]
+            {
+                typeof(char?),
+                typeof(Guid?),
+                typeof(bool?),
+                typeof(byte?),
+                typeof(short?),
+                typeof(int?),
+                typeof(long?),
+                typeof(float?),
+                typeof(double?),
+                typeof(decimal?),
+                typeof(sbyte?),
+                typeof(ushort?),
+                typeof(uint?),
+                typeof(ulong?),
+                typeof(DateTime?),
+                typeof(DateTimeOffset?),
+                typeof(TimeSpan?)
+            };
 
-            List = types.Concat(nullTypes).ToArray();
+            _primitiveTypes = types.Concat(nullableTypes).ToArray();
         }
 
         /// <summary>
@@ -53,13 +71,25 @@ namespace MicroRepository.Core
         /// </summary>
         /// <param name="type">The type to check.</param>
         /// <returns>True if the type is a primitive type, otherwise false.</returns>
-        public static bool IsPrimitive(Type type)
+        public static bool IsPrimitiveType(this Type type)
         {
-            if (List.Any(x => x.IsAssignableFrom(type)))
-                return true;
+            if (_cache.TryGetValue(type, out bool result))
+                return result;
 
-            var nut = Nullable.GetUnderlyingType(type);
-            return nut != null && nut.GetTypeInfo().IsEnum;
+            if (_primitiveTypes.Any(x => x.IsAssignableFrom(type)))
+            {
+                _cache.TryAdd(type, true);
+                return true;
+            }
+
+            var underlyingType = Nullable.GetUnderlyingType(type);
+            var isNullableEnum = underlyingType?.IsEnum ?? false;
+
+            if (isNullableEnum)
+                _cache.TryAdd(type, true);
+
+            return isNullableEnum;
         }
+
     }
 }

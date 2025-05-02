@@ -2,9 +2,9 @@
 
 namespace MicroRepository.Repository.Attributes
 {
-    public class ViewAttribute : Attribute
+    public class MapAttribute : Attribute
     {
-        public ViewAttribute(string name)
+        public MapAttribute(string name)
         {
             Name = name;
         }

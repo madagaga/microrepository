@@ -26,7 +26,7 @@ namespace MicroRepository.Sql
         ///<summary>
         /// Gets or sets the SQL template.
         ///</summary>
-        public string Template { get; internal set; }
+        public string Template { get; internal set; } = string.Empty;
 
 
         Dictionary<string, SqlClauseCollection> _clauses = new Dictionary<string, SqlClauseCollection>();
@@ -36,7 +36,7 @@ namespace MicroRepository.Sql
         ///</summary>
         public Core.DynamicParameters.DynamicParameter Parameters { get; } = new Core.DynamicParameters.DynamicParameter();
 
-        string _rawSQL;
+        string _rawSQL = string.Empty;
 
         ///<summary>
         /// Gets the raw SQL statement.
@@ -59,10 +59,10 @@ namespace MicroRepository.Sql
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<param name="joiner">The joiner for multiple clauses.</param>
         ///<param name="keyword">The keyword for the clause.</param>
-        public void AddClause(string name, string sql, object parameters, string joiner, string keyword = "")
+        public void AddClause(string name, string sql, object? parameters, string joiner, string keyword = "")
         {
 
-            SqlClauseCollection clauses = null;
+            SqlClauseCollection? clauses = null;
             if (!_clauses.TryGetValue(name, out clauses))
             {
                 clauses = new SqlClauseCollection() { KeyWord = keyword };
@@ -102,9 +102,10 @@ namespace MicroRepository.Sql
         /// Adds a parameter to the dynamic parameters with an auto-generated key.
         ///</summary>
         ///<param name="value">The value of the parameter.</param>
-        public void AddParametersWithCount(object value)
+        public void AddParametersWithCount(object? value)
         {
-            AddParameter(string.Format("p{0}", Parameters.Count), value);
+            if (value != null)
+                AddParameter(string.Format("p{0}", Parameters.Count), value);
         }
 
         #region helpers
@@ -115,7 +116,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder Intersect(string sql, object parameters = null)
+        public SqlBuilder Intersect(string sql, object? parameters = null)
         {
             AddClause("intersect", sql, parameters, joiner: "\nINTERSECT\n ", keyword: "\n ");
             return this;
@@ -127,7 +128,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder InnerJoin(string sql, object parameters = null)
+        public SqlBuilder InnerJoin(string sql, object? parameters = null)
         {
             AddClause("innerjoin", sql, parameters, joiner: "\nINNER JOIN ", keyword: "\nINNER JOIN ");
             return this;
@@ -139,7 +140,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder LeftJoin(string sql, object parameters = null)
+        public SqlBuilder LeftJoin(string sql, object? parameters = null)
         {
             AddClause("leftjoin", sql, parameters, joiner: "\nLEFT JOIN ", keyword: "\nLEFT JOIN ");
             return this;
@@ -151,7 +152,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder RightJoin(string sql, object parameters = null)
+        public SqlBuilder RightJoin(string sql, object? parameters = null)
         {
             AddClause("rightjoin", sql, parameters, joiner: "\nRIGHT JOIN ", keyword: "\nRIGHT JOIN ");
             return this;
@@ -164,7 +165,7 @@ namespace MicroRepository.Sql
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<param name="index">The index of the WHERE clause.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder Where(string sql, object parameters = null, int index = 0)
+        public SqlBuilder Where(string sql, object? parameters = null, int index = 0)
         {
             if (!string.IsNullOrEmpty(sql))
                 AddClause("where", sql, parameters, " AND ", keyword: "WHERE ");
@@ -178,7 +179,7 @@ namespace MicroRepository.Sql
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<param name="index">The index of the WHERE clause.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder OrWhere(string sql, object parameters = null, int index = 0)
+        public SqlBuilder OrWhere(string sql, object? parameters = null, int index = 0)
         {
             if (!string.IsNullOrEmpty(sql))
                 AddClause("where", sql, parameters, " OR ", keyword: "WHERE ");
@@ -191,7 +192,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder OrderBy(string sql, object parameters = null)
+        public SqlBuilder OrderBy(string sql, object? parameters = null)
         {
             AddClause("orderby", sql, parameters, " , ", keyword: "ORDER BY ");
             return this;
@@ -203,7 +204,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder Join(string sql, object parameters = null)
+        public SqlBuilder Join(string sql, object? parameters = null)
         {
             AddClause("join", sql, parameters, joiner: "\nJOIN ", keyword: "\nJOIN ");
             return this;
@@ -215,7 +216,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder GroupBy(string sql, object parameters = null)
+        public SqlBuilder GroupBy(string sql, object? parameters = null)
         {
             AddClause("groupby", sql, parameters, joiner: " , ", keyword: "\nGROUP BY ");
             return this;
@@ -227,7 +228,7 @@ namespace MicroRepository.Sql
         ///<param name="sql">The SQL statement.</param>
         ///<param name="parameters">The parameters for the SQL statement.</param>
         ///<returns>The updated SQL builder.</returns>
-        public SqlBuilder Having(string sql, object parameters = null)
+        public SqlBuilder Having(string sql, object? parameters = null)
         {
             AddClause("having", sql, parameters, joiner: "\nAND ", keyword: "HAVING ");
             return this;
@@ -253,7 +254,7 @@ namespace MicroRepository.Sql
         {
             if (this._clauses.ContainsKey("take"))
                 this._clauses.Remove("take");
-            string keyword = RepositoryDiscoveryService.Template.Take;
+            string keyword = DbSettings.Template.Take;
 
 
             AddClause("take", count.ToString(), null, "", keyword: keyword);
@@ -270,7 +271,7 @@ namespace MicroRepository.Sql
         {
             if (this._clauses.ContainsKey("skip"))
                 this._clauses.Remove("skip");
-            string keyword = RepositoryDiscoveryService.Template.Skip;
+            string keyword = DbSettings.Template.Skip;
 
             AddClause("skip", count.ToString(), null, "", keyword: keyword);
             return this;

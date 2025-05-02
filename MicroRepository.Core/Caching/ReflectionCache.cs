@@ -5,68 +5,112 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Threading.Tasks;
 
 namespace MicroRepository.Core.Caching
 {
+    /// <summary>
+    /// Provides caching mechanisms for reflection operations to improve performance.
+    /// </summary>
     internal static class ReflectionCache
     {
-        // Cache for storing property accessors
-        static ConcurrentDictionary<Type, Dictionary<string, CompiledPropertyAccessor<object>>> _propertyCache = new ConcurrentDictionary<Type, Dictionary<string, CompiledPropertyAccessor<object>>>();
+        /// <summary>
+        /// Thread-safe cache for property accessors.
+        /// </summary>
+        private static readonly ConcurrentDictionary<Type, Dictionary<string, CompiledPropertyAccessor<object>>>
+            PropertyCache = new();
 
-        // Cache for storing parameterless constructors
-        static ConcurrentDictionary<Type, Delegate> _parameterLessConstructorCache = new ConcurrentDictionary<Type, Delegate>();
+        /// <summary>
+        /// Thread-safe cache for parameterless constructors.
+        /// </summary>
+        private static readonly ConcurrentDictionary<Type, Func<object>>
+            ConstructorCache = new();
 
-        // Initializes the cache for the specified type
-        ///<summary>
-        /// Initializes the cache for the specified type
-        ///</summary>
-        internal static void initializeCache(Type type)
+        /// <summary>
+        /// Initializes cache entries for a specified type.
+        /// </summary>
+        /// <param name="type">The type to initialize cache for.</param>
+        /// <exception cref="ArgumentNullException">Thrown when type is null.</exception>
+        private static void InitializeCache(Type type)
         {
-            if (!_propertyCache.ContainsKey(type))
-                _propertyCache.TryAdd(
-                    type,
-                    type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                        .Where(c => c.GetMethod != null && c.SetMethod != null)
-                        .Select(p => new CompiledPropertyAccessor<object>(p))
-                        .ToDictionary(c => c.Property.Name, c => c));
+            ArgumentNullException.ThrowIfNull(type);
 
-            if (!_parameterLessConstructorCache.ContainsKey(type))
-            {
-                _parameterLessConstructorCache.TryAdd(
-                    type,
-                    Expression.Lambda(Expression.New(type)).Compile());
-            }
+            PropertyCache.GetOrAdd(type, t =>
+                t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Where(p => p.GetMethod != null && p.SetMethod != null)
+                    .Select(p => new CompiledPropertyAccessor<object>(p))
+                    .ToDictionary(c => c.Property.Name, c => c));
+
+            ConstructorCache.GetOrAdd(type, t =>
+                Expression.Lambda<Func<object>>(Expression.New(t)).Compile());
         }
 
-        // Gets the properties of the specified type from the cache
-        ///<summary>
-        /// Gets the properties of the specified type from the cache
-        ///</summary>
+        /// <summary>
+        /// Gets cached property accessors for a specified type.
+        /// </summary>
+        /// <param name="type">The type to get properties for.</param>
+        /// <returns>Dictionary of property accessors.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when type is null.</exception>
         public static Dictionary<string, CompiledPropertyAccessor<object>> GetProperties(Type type)
         {
-            initializeCache(type);
-            return _propertyCache[type];
+            ArgumentNullException.ThrowIfNull(type);
+
+            return PropertyCache.GetOrAdd(type, t =>
+                t.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    .Where(p => p.GetMethod != null && p.SetMethod != null)
+                    .Select(p => new CompiledPropertyAccessor<object>(p))
+                    .ToDictionary(c => c.Property.Name, c => c));
         }
 
-        // Gets the parameterless constructor of the specified type from the cache
-        ///<summary>
-        /// Gets the parameterless constructor of the specified type from the cache
-        ///</summary>
-        public static Delegate GetConstructor(Type type)
+        /// <summary>
+        /// Gets cached constructor for a specified type.
+        /// </summary>
+        /// <param name="type">The type to get constructor for.</param>
+        /// <returns>Compiled constructor delegate.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when type is null.</exception>
+        /// <exception cref="MissingMethodException">Thrown when parameterless constructor is not found.</exception>
+        public static Func<object> GetConstructor(Type type)
         {
-            initializeCache(type);
-            return _parameterLessConstructorCache[type];
+            ArgumentNullException.ThrowIfNull(type);
+
+            return ConstructorCache.GetOrAdd(type, t =>
+            {
+                var ctor = t.GetConstructor(Type.EmptyTypes)
+                    ?? throw new MissingMethodException($"No parameterless constructor found for type {t.Name}");
+
+                return Expression.Lambda<Func<object>>(Expression.New(t)).Compile();
+            });
         }
 
-        // Creates an instance of the specified type using the parameterless constructor from the cache
-        ///<summary>
-        /// Creates an instance of the specified type using the parameterless constructor from the cache
-        ///</summary>
+        /// <summary>
+        /// Creates an instance of specified type using cached constructor.
+        /// </summary>
+        /// <param name="type">The type to create instance of.</param>
+        /// <returns>New instance of specified type.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when type is null.</exception>
         public static object CreateInstance(Type type)
         {
-            initializeCache(type);
-            return _parameterLessConstructorCache[type].DynamicInvoke();
+            ArgumentNullException.ThrowIfNull(type);
+
+            return GetConstructor(type)();
+        }
+
+        /// <summary>
+        /// Creates a strongly typed instance of specified type.
+        /// </summary>
+        /// <typeparam name="T">The type to create instance of.</typeparam>
+        /// <returns>New instance of specified type.</returns>
+        public static T CreateInstance<T>() where T : new()
+        {
+            return (T)CreateInstance(typeof(T));
+        }
+
+        /// <summary>
+        /// Clears all cached data.
+        /// </summary>
+        public static void ClearCache()
+        {
+            PropertyCache.Clear();
+            ConstructorCache.Clear();
         }
     }
 }

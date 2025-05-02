@@ -1,7 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
+	<PublishAot>true</PublishAot>
+	<TrimmerSingleWarn>false</TrimmerSingleWarn>
+	<PublishTrimmed>true</PublishTrimmed>
+	<OptimizationPreference>Speed</OptimizationPreference>
+	<IlcOptimizationPreference>Size</IlcOptimizationPreference>
+	<IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+	  <IsAotCompatible>true</IsAotCompatible>
+	  <Nullable>enable</Nullable>
+
   </PropertyGroup>
 
 </Project>

@@ -2,9 +2,22 @@
 {
     public enum DatabaseType : int
     {
-        Auto,
-        MSSql = 1,
+        None = 0,
+        /// <summary>
+        /// Microsoft SQLServer
+        /// </summary>
+        SQLServer = 1,
+        /// <summary>
+        /// MySQL
+        /// </summary>
         MySql,
-        SQLite
+        /// <summary>
+        /// SQLite
+        /// </summary>
+        SQLite,
+        /// <summary>
+        /// Postgres 
+        /// </summary>
+        Postgres,
     }
 }
