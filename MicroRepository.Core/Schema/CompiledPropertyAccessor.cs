@@ -111,7 +111,7 @@ namespace MicroRepository.Core.Schema
 
             var convertedValue = Expression.Convert(valueParam, property.PropertyType);
             var propertyAccess = Expression.Property(
-                Expression.TypeAs(entityParam, property.DeclaringType),
+                Expression.Convert(entityParam, property.DeclaringType),
                 property
             );
 

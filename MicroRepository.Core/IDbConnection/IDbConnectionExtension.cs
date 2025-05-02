@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Reflection.PortableExecutable;
 
 namespace MicroRepository.Core.Sql
 {
@@ -27,6 +28,35 @@ namespace MicroRepository.Core.Sql
                 BindParameters(command, parameters);
                 command.CommandText = sql;
                 return command.ExecuteNonQuery();
+            }
+            finally
+            {
+                connection.CloseIfNeeded();
+            }
+        }
+
+
+        public static IEnumerable<DbRow> Query(this IDbConnection connection, string sql, DynamicParameter? parameters = null, bool buffered = true)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentNullException.ThrowIfNull(sql);
+            try
+            {
+                connection.OpenIfNeeded();
+                using var command = connection.CreateCommand();
+                BindParameters(command, parameters);
+                command.CommandText = sql;
+                using var reader = command.ExecuteReader();
+                
+                string[] columnNames = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToArray();
+                var rowData = new object[reader.FieldCount];
+                while (reader.Read())
+                {
+                    reader.GetValues(rowData);
+                    DbRow row = new(columnNames, rowData);
+                    yield return row;
+                }                
+                
             }
             finally
             {
@@ -75,7 +105,7 @@ namespace MicroRepository.Core.Sql
         public static T? ExecuteScalar<T>(this IDbConnection connection, string sql, DynamicParameter? parameters = null)
         {
             object? result = connection.ExecuteScalar(sql, parameters);
-            return result is null ? default! : (T)TypeConverterCache.Convert(result, typeof(T));
+            return (T?)TypeConverterCache.ConvertTo(result, typeof(T));
         }
 
 
@@ -108,6 +138,7 @@ namespace MicroRepository.Core.Sql
             command.Connection?.OpenIfNeeded();
 
             using var reader = command.ExecuteReader(behavior);
+           
             if (!targetType.IsPrimitiveType())
             {
                 var cachedMapping = GetCachedMapping(command.CommandText, reader, targetType);
@@ -122,7 +153,7 @@ namespace MicroRepository.Core.Sql
                     {
                         var valueToSet = rowData[kvp.Key] is DBNull
                             ? null
-                            : TypeConverterCache.Convert(rowData[kvp.Key], kvp.Value.Type); 
+                            : TypeConverterCache.ConvertTo(rowData[kvp.Key], kvp.Value.Type); 
                         kvp.Value.Set(instance, valueToSet);
                     }
 
@@ -138,7 +169,7 @@ namespace MicroRepository.Core.Sql
                     if (value is DBNull)
                         yield return default;
                     else
-                        yield return (T)TypeConverterCache.Convert(value, underlyingType);
+                        yield return (T)TypeConverterCache.ConvertTo(value, underlyingType);
                 }
             }
         }
@@ -177,6 +208,7 @@ namespace MicroRepository.Core.Sql
                 var parameter = command.CreateParameter();
                 parameter.ParameterName = kvp.Key;
                 parameter.Value = kvp.Value ?? DBNull.Value;
+
                 command.Parameters.Add(parameter);
             }
         }

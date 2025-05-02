@@ -28,7 +28,7 @@ namespace MicroRepository.Schema
                 if (string.IsNullOrEmpty(_selectString))
                 {
                     if (Name != DbName)
-                        _selectString = $"{FullDbName} AS {DbSettings.Template.Enquote(Name)}";
+                        _selectString = $"{FullDbName} AS {DbSettings.Template.EnquoteColumnName(Name)}";
                     else
                         _selectString = $"{FullDbName}";
                 }
@@ -63,7 +63,7 @@ namespace MicroRepository.Schema
             // Check for [Map] attribute
             MapAttribute? mapAttribute = _compiledPropertyAccessor.Property.GetCustomAttribute<MapAttribute>();
             if (mapAttribute != null && mapAttribute.Name != Name)
-                DbName = DbSettings.Template.Enquote(mapAttribute.Name);
+                DbName = DbSettings.Template.EnquoteColumnName(mapAttribute.Name);
             else
                 DbName = DbSettings.Template.EnquoteColumnName(Name);
             

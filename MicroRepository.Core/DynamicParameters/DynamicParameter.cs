@@ -1,4 +1,5 @@
 ﻿using MicroRepository.Core.Caching;
+using MicroRepository.Core.TypeConversion;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -69,8 +70,7 @@ namespace MicroRepository.Core.DynamicParameters
 
             foreach (var property in properties)
             {
-                var value = property.Value.Get(obj);
-                if (value == null) continue;
+                var value = property.Value.Get(obj);                
 
                 if (value is IDictionary<string, object> dict)
                 {
@@ -78,7 +78,7 @@ namespace MicroRepository.Core.DynamicParameters
                 }
                 else
                 {
-                    this[property.Key] = value;
+                    this[property.Key] = TypeConverterCache.ConvertFrom(value);
                 }
             }
         }

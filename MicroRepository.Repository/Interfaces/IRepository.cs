@@ -10,7 +10,7 @@ namespace MicroRepository.Repository.Interfaces
         IDbConnection Connection { get; }
     }
 
-    public interface IRepository<TEntity> : IRepository,  IEnumerableRepository<TEntity>
+    public interface IRepository<TEntity> : IReadOnlyRepository<TEntity>
     {
         
         /// <summary>
@@ -34,21 +34,6 @@ namespace MicroRepository.Repository.Interfaces
         /// <returns>element updated from database</returns>
         TEntity Update(TEntity item);
 
-        /// <summary>
-        /// Find an element by its primary key
-        /// class bust be decorated with KeyAttribute
-        /// </summary>
-        /// <param name="orderedKeyValues">primary key s</param>
-        /// <returns>Found element </returns>
-        TEntity? Find(params object[] orderedKeyValues);
-
-        /// <summary>
-        /// Execute a raw query 
-        /// </summary>
-        /// <param name="sqlQuery">sql query</param>
-        /// <param name="parameter">object parameter</param>
-        /// <returns>Found element</returns>
-        IEnumerable<TEntity> ExecuteQuery(string sqlQuery, object? parameter);
     }
 }
 

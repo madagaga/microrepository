@@ -16,13 +16,34 @@ namespace MicroRepository.Core.TypeConversion
         private static readonly ConcurrentDictionary<(Type source, Type target), Func<object, object>> CustomConverters
             = new ConcurrentDictionary<(Type source, Type target), Func<object, object>>();
 
-        // Méthode pour enregistrer des convertisseurs personnalisés
+        private static ConcurrentDictionary<Type, Type> registeredTypes = new ConcurrentDictionary<Type, Type>();
+        
         public static void RegisterConverter<TSource, TTarget>(Func<TSource, TTarget> converter)
         {
             CustomConverters[(typeof(TSource), typeof(TTarget))] = (obj) => converter((TSource)obj)!;
+            registeredTypes[typeof(TSource)] = typeof(TTarget);
         }
 
-        public static object Convert(object value, Type targetType)
+        
+
+        public static object? ConvertFrom(object? value)
+        {
+            if (value == null) return null;
+            Type sourceType = value.GetType();
+            
+
+            if(registeredTypes.TryGetValue(sourceType, out Type targetType))
+            {
+                if (CustomConverters.TryGetValue((sourceType, targetType), out var customConverter))
+                {
+                    return customConverter(value);
+                }
+                return value;
+            }
+            return value;
+        }
+
+        public static object? ConvertTo(object? value, Type targetType)
         {
             if (value == null) return null;
 

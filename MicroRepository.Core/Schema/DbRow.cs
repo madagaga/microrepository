@@ -12,9 +12,9 @@ namespace MicroRepository.Core.Schema
     public class DbRow : Dictionary<string, object>
     {
 
-        internal DbRow(List<string> columns, object[] rowData)
+        internal DbRow(string[] columns, object[] rowData)
         {
-            for (int i = 0; i < columns.Count; i++)
+            for (int i = 0; i < columns.Length; i++)
                 this.Add(columns[i], rowData[i]);
         }
     }

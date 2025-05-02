@@ -58,7 +58,7 @@ namespace MicroRepository.Sql
         {
             string countSql = $"SELECT COUNT(*) FROM ({InternalBuilder.RawSql}) AS subquery";
             
-            string pagedSql = string.Concat(InternalBuilder.RawSql, " ", string.Format(DbSettings.Template.Take, " @ResultPerPage "), string.Format(DbSettings.Template.Skip, " @Offset"));
+            string pagedSql = string.Concat(InternalBuilder.RawSql, " ", DbSettings.Template.Take, " @ResultPerPage ", DbSettings.Template.Skip, " @Offset");
 
            
             

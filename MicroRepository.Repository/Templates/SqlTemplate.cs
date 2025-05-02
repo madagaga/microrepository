@@ -30,9 +30,9 @@ namespace MicroRepository.Templates
 
         internal string EnquoteColumnName(string columnName)
         {
-            return DbSettings.EnquoteColumnNames ? EnquoteColumnName(columnName) : columnName;
+            return DbSettings.EnquoteColumnNames ? Enquote(columnName) : columnName;
         }
-        internal string Enquote(string? column)
+        private string Enquote(string? column)
         {
             ArgumentNullException.ThrowIfNull(column, nameof(column));
             return string.Format(QuoteChar, column);

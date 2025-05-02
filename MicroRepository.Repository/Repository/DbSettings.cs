@@ -10,7 +10,6 @@ namespace MicroRepository.Repository
 
         #region configuration purpose
         public static bool Buffered { get; set; } = true;
-        public static bool UpdateChangeOnly { get; set; } = true;
         static SqlTemplate? _template ;
         internal static SqlTemplate Template
         {
@@ -56,9 +55,6 @@ namespace MicroRepository.Repository
         
         #endregion        
 
-        internal static object DiagnosticString()
-        {
-            return string.Format("** RepositoryConfiguration **\r\nUpdateChangeOnly : {0}\r\nDatabase Type : {1}", UpdateChangeOnly, _dataBaseType);
-        }
+       
     }
 }

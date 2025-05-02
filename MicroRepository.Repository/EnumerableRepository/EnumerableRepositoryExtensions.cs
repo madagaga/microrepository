@@ -53,7 +53,7 @@ namespace MicroRepository.Sql
             List<QueryParameter> queryProperties = new List<QueryParameter>();
             ExpressionParser.ParseExpression(selector.Body, ref queryProperties);
             var joinTable = TableDefinitionCache.GetTableDefinition(typeof(TJoin));
-            StringBuilder sqlchunk = new StringBuilder($"{DbSettings.Template.Enquote(joinTable.Name)} ON");
+            StringBuilder sqlchunk = new StringBuilder($"{joinTable.DBName} AS {joinTable.Alias} ON");
 
             foreach (QueryParameter item in queryProperties)
             {
@@ -230,7 +230,7 @@ namespace MicroRepository.Sql
             repo.InternalBuilder.Take(1);
             if (predicate != null)
                 Where(repo, predicate);
-            return ((IEnumerable<TEntity>)repo).FirstOrDefault();
+            return repo.ToList().FirstOrDefault();
         }
 
         public static IEnumerableRepository<TEntity> GroupBy<TEntity, TKey>(this IEnumerableRepository<TEntity> repo,
